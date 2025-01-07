@@ -228,3 +228,20 @@ def delete_user(user_id):
     db.session.commit()
     flash(f'User {user.username} has been deleted.')
     return redirect(url_for('main.manage_users'))
+
+@main.route('/reset_password/<int:user_id>', methods=['POST'])
+@login_required
+def reset_password(user_id):
+    if not current_user.is_admin:
+        flash('Only administrators can reset passwords.')
+        return redirect(url_for('main.manage_users'))
+        
+    user = User.query.get_or_404(user_id)
+    new_password = request.form.get('new_password')
+    
+    if new_password:
+        user.set_password(new_password)
+        db.session.commit()
+        flash(f'Password reset successfully for {user.username}')
+    
+    return redirect(url_for('main.manage_users'))
