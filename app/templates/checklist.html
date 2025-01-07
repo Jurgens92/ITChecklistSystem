@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="checklist-container">
+    <h1>Checklist for {{ client.name }}</h1>
+    
+    <form method="POST" action="{{ url_for('main.submit_checklist') }}">
+        <input type="hidden" name="client_id" value="{{ client.id }}">
+        
+        <div class="checklist-section">
+            <h2>Server Checklist</h2>
+            {% for item in server_items %}
+            <div class="checklist-item">
+                <label>
+                    <input type="checkbox" name="items" value="{{ item.id }}">
+                    {{ item.description }}
+                </label>
+            </div>
+            {% endfor %}
+        </div>
+
+        <div class="checklist-section">
+            <h2>Desktop Checklist</h2>
+            {% for item in desktop_items %}
+            <div class="checklist-item">
+                <label>
+                    <input type="checkbox" name="items" value="{{ item.id }}">
+                    {{ item.description }}
+                </label>
+            </div>
+            {% endfor %}
+        </div>
+
+        <div class="form-actions">
+            <button type="submit" class="button">Submit Checklist</button>
+            <a href="{{ url_for('main.dashboard') }}" class="button secondary">Back to Dashboard</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

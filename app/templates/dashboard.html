@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="dashboard">
+    <h1>IT Checklist Dashboard</h1>
+    
+    <div class="welcome-message">
+        Welcome, {{ current_user.username }}!
+    </div>
+
+    <div class="client-section">
+        <h2>Select Client</h2>
+        <div class="client-search-container">
+            <input type="text" id="clientSearch" class="search-input" placeholder="Search clients..." onkeyup="filterClients()">
+            <select id="clientDropdown" class="client-select" size="10">
+                {% if clients %}
+                    {% for client in clients %}
+                        <option value="{{ client.id }}">{{ client.name }}</option>
+                    {% endfor %}
+                {% else %}
+                    <option disabled>No clients available</option>
+                {% endif %}
+            </select>
+            <button onclick="viewSelectedClient()" class="button">View Checklist</button>
+        </div>
+
+        {% if current_user.is_admin %}
+            <div class="admin-controls">
+                <h2>Admin Controls</h2>
+                <a href="{{ url_for('main.manage_clients') }}" class="button">Manage Clients</a>
+                <a href="{{ url_for('main.manage_users') }}" class="button">Manage Users</a>
+                <a href="{{ url_for('main.reports') }}" class="button">View Reports</a>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+function filterClients() {
+    const input = document.getElementById('clientSearch');
+    const filter = input.value.toLowerCase();
+    const select = document.getElementById('clientDropdown');
+    const options = select.getElementsByTagName('option');
+
+    for (let i = 0; i < options.length; i++) {
+        const txtValue = options[i].text;
+        if (txtValue.toLowerCase().indexOf(filter) > -1) {
+            options[i].style.display = "";
+        } else {
+            options[i].style.display = "none";
+        }
+    }
+}
+
+function viewSelectedClient() {
+    const select = document.getElementById('clientDropdown');
+    const selectedClientId = select.value;
+    if (selectedClientId) {
+        window.location.href = "{{ url_for('main.client_checklist', client_id=0) }}".replace('0', selectedClientId);
+    } else {
+        alert('Please select a client first');
+    }
+}
+</script>
+
+<style>
+.client-search-container {
+    max-width: 600px;
+    margin: 20px 0;
+}
+
+.search-input {
+    width: 100%;
+    padding: 10px;
+    margin-bottom: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 16px;
+}
+
+.client-select {
+    width: 100%;
+    padding: 5px;
+    margin-bottom: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background-color: white;
+}
+
+.client-select option {
+    padding: 8px;
+    cursor: pointer;
+}
+
+.client-select option:hover {
+    background-color: #f0f0f0;
+}
+
+.client-select:focus {
+    outline: none;
+    border-color: #007bff;
+}
+
+.button {
+    display: inline-block;
+    padding: 10px 20px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    text-decoration: none;
+    font-size: 16px;
+}
+
+.button:hover {
+    background-color: #0056b3;
+}
+
+.admin-controls {
+    margin-top: 30px;
+    padding: 20px;
+    background-color: #f8f9fa;
+    border-radius: 5px;
+}
+
+.admin-controls .button {
+    margin-right: 10px;
+}
+</style>
+{% endblock %}

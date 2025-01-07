@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="manage-clients-container">
+    <h1>Manage Clients</h1>
+
+    <div class="add-client-section">
+        <h2>Add New Client</h2>
+        <form method="POST" action="{{ url_for('main.add_client') }}" class="add-client-form">
+            <input type="text" name="client_name" placeholder="Enter client name" required>
+            <button type="submit" class="button">Add Client</button>
+        </form>
+    </div>
+
+    <div class="client-list-section">
+        <h2>Client List</h2>
+        <div class="client-filters">
+            <input type="text" id="clientSearch" placeholder="Search clients..." onkeyup="filterClients()">
+        </div>
+        <table class="client-table">
+            <thead>
+                <tr>
+                    <th>Client Name</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for client in clients %}
+                <tr class="client-row" data-client-name="{{ client.name.lower() }}">
+                    <td>{{ client.name }}</td>
+                    <td>
+                        <span class="status-badge {% if client.is_active %}active{% else %}archived{% endif %}">
+                            {{ 'Active' if client.is_active else 'Archived' }}
+                        </span>
+                    </td>
+                    <td>
+                        <a href="{{ url_for('main.toggle_client', client_id=client.id) }}" 
+                           class="button {% if client.is_active %}archive-btn{% else %}activate-btn{% endif %}">
+                            {{ 'Archive' if client.is_active else 'Activate' }}
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="back-link">
+        <a href="{{ url_for('main.dashboard') }}" class="button secondary">Back to Dashboard</a>
+    </div>
+</div>
+
+<script>
+function filterClients() {
+    const input = document.getElementById('clientSearch');
+    const filter = input.value.toLowerCase();
+    const rows = document.getElementsByClassName('client-row');
+
+    for (let row of rows) {
+        const clientName = row.getAttribute('data-client-name');
+        if (clientName.includes(filter)) {
+            row.style.display = '';
+        } else {
+            row.style.display = 'none';
+        }
+    }
+}
+</script>
+
+<style>
+.manage-clients-container {
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+.add-client-form {
+    display: flex;
+    gap: 10px;
+    margin: 20px 0;
+}
+
+.add-client-form input {
+    flex: 1;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
+.client-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 20px 0;
+    background-color: white;
+}
+
+.client-table th,
+.client-table td {
+    padding: 12px;
+    text-align: left;
+    border-bottom: 1px solid #ddd;
+}
+
+.client-table th {
+    background-color: #f8f9fa;
+    font-weight: bold;
+}
+
+.status-badge {
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 0.9em;
+}
+
+.status-badge.active {
+    background-color: #d4edda;
+    color: #155724;
+}
+
+.status-badge.archived {
+    background-color: #f8d7da;
+    color: #721c24;
+}
+
+.archive-btn {
+    background-color: #dc3545;
+}
+
+.activate-btn {
+    background-color: #28a745;
+}
+
+.client-filters {
+    margin: 20px 0;
+}
+
+#clientSearch {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
+.back-link {
+    margin-top: 20px;
+}
+
+.button.secondary {
+    background-color: #6c757d;
+}
+</style>
+{% endblock %}

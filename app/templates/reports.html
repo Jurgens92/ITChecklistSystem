@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="reports-container">
+    <h1>Reports Dashboard</h1>
+    
+    <div class="report-sections">
+        <div class="report-card">
+            <h2>Summary Report</h2>
+            <p>View overall statistics and recent activity</p>
+            <a href="{{ url_for('main.summary_report') }}" class="button">View Summary</a>
+        </div>
+        
+        <div class="report-card">
+            <h2>Client Reports</h2>
+            <select id="client-select" class="report-select">
+                <option value="">Select a client...</option>
+                {% for client in clients %}
+                <option value="{{ client.id }}">{{ client.name }}</option>
+                {% endfor %}
+            </select>
+            <button onclick="viewClientReport()" class="button">View Report</button>
+        </div>
+        
+        <div class="report-card">
+            <h2>User Reports</h2>
+            <select id="user-select" class="report-select">
+                <option value="">Select a user...</option>
+                {% for user in users %}
+                <option value="{{ user.id }}">{{ user.username }}</option>
+                {% endfor %}
+            </select>
+            <button onclick="viewUserReport()" class="button">View Report</button>
+        </div>
+    </div>
+</div>
+
+<script>
+function viewClientReport() {
+    const clientId = document.getElementById('client-select').value;
+    if (clientId) {
+        window.location.href = "{{ url_for('main.client_report', client_id=0) }}".replace('0', clientId);
+    }
+}
+
+function viewUserReport() {
+    const userId = document.getElementById('user-select').value;
+    if (userId) {
+        window.location.href = "{{ url_for('main.user_report', user_id=0) }}".replace('0', userId);
+    }
+}
+</script>
+{% endblock %}

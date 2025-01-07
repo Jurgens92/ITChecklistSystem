@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="report-container">
+    <h1>Summary Report</h1>
+    
+    <div class="summary-stats">
+        <div class="stat-card">
+            <h3>Total Checks</h3>
+            <p class="stat-number">{{ total_checks }}</p>
+        </div>
+        
+        <div class="stat-card">
+            <h3>Checks (Last 30 Days)</h3>
+            <p class="stat-number">{{ recent_checks }}</p>
+        </div>
+        
+        <div class="stat-card">
+            <h3>Total Clients</h3>
+            <p class="stat-number">{{ total_clients }}</p>
+        </div>
+        
+        <div class="stat-card">
+            <h3>Total Users</h3>
+            <p class="stat-number">{{ total_users }}</p>
+        </div>
+    </div>
+    
+    <div class="report-section">
+        <h2>Most Active Clients</h2>
+        <table class="report-table">
+            <thead>
+                <tr>
+                    <th>Client</th>
+                    <th>Total Checks</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for client, count in active_clients %}
+                <tr>
+                    <td>{{ client.name }}</td>
+                    <td>{{ count }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    
+    <div class="report-section">
+        <h2>Most Active Users</h2>
+        <table class="report-table">
+            <thead>
+                <tr>
+                    <th>User</th>
+                    <th>Total Checks</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for user, count in active_users %}
+                <tr>
+                    <td>{{ user.username }}</td>
+                    <td>{{ count }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    
+    <div class="report-actions">
+        <a href="{{ url_for('main.reports') }}" class="button secondary">Back to Reports</a>
+    </div>
+</div>
+{% endblock %}
