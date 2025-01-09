@@ -21,6 +21,7 @@ class Client(db.Model):
     name = db.Column(db.String(100), nullable=False)
     is_active = db.Column(db.Boolean, default=True)
     checklist_records = db.relationship('ChecklistRecord', backref='client')
+    checklists = db.relationship('ClientChecklist', backref='client', cascade='all, delete-orphan')
 
 class ChecklistItem(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -39,3 +40,21 @@ class CompletedItem(db.Model):
     record_id = db.Column(db.Integer, db.ForeignKey('checklist_record.id'))
     checklist_item_id = db.Column(db.Integer, db.ForeignKey('checklist_item.id'))
     completed = db.Column(db.Boolean, default=False)
+
+class ChecklistTemplate(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    is_default = db.Column(db.Boolean, default=False)
+    items = db.relationship('TemplateItem', backref='template', cascade='all, delete-orphan')
+
+class TemplateItem(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    description = db.Column(db.String(200), nullable=False)
+    category = db.Column(db.String(50))
+    template_id = db.Column(db.Integer, db.ForeignKey('checklist_template.id'))
+
+class ClientChecklist(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    client_id = db.Column(db.Integer, db.ForeignKey('client.id'))
+    description = db.Column(db.String(200), nullable=False)
+    category = db.Column(db.String(50))

@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, redirect, url_for, flash, request
 from flask_login import login_user, logout_user, login_required, current_user
-from app.models import User, Client, ChecklistItem, ChecklistRecord, CompletedItem
+from app.models import User, Client, ChecklistItem, ChecklistRecord, CompletedItem, ChecklistTemplate, TemplateItem 
 from app import db
 from sqlalchemy import func
 from datetime import datetime, timedelta
@@ -146,7 +146,8 @@ def manage_clients():
         return redirect(url_for('main.dashboard'))
     
     clients = Client.query.all()
-    return render_template('manage_clients.html', clients=clients)
+    templates = ChecklistTemplate.query.all()
+    return render_template('manage_clients.html', clients=clients, templates=templates)
 
 @main.route('/add-client', methods=['POST'])
 @login_required
@@ -156,12 +157,28 @@ def add_client():
         return redirect(url_for('main.dashboard'))
     
     client_name = request.form.get('client_name')
+    template_id = request.form.get('template_id')
+    
     if client_name:
         if Client.query.filter_by(name=client_name).first():
             flash('A client with this name already exists.')
         else:
             new_client = Client(name=client_name, is_active=True)
             db.session.add(new_client)
+            db.session.flush()  # Get the new client ID
+            
+            # Apply template if selected
+            if template_id:
+                template = ChecklistTemplate.query.get(template_id)
+                if template:
+                    for item in template.items:
+                        client_item = ClientChecklist(
+                            client_id=new_client.id,
+                            description=item.description,
+                            category=item.category
+                        )
+                        db.session.add(client_item)
+            
             db.session.commit()
             flash('Client added successfully.')
     return redirect(url_for('main.manage_clients'))
@@ -245,3 +262,108 @@ def reset_password(user_id):
         flash(f'Password reset successfully for {user.username}')
     
     return redirect(url_for('main.manage_users'))
+
+@main.route('/manage-templates')
+@login_required
+def manage_templates():
+    if not current_user.is_admin:
+        flash('Access denied. Admin privileges required.')
+        return redirect(url_for('main.dashboard'))
+    
+    templates = ChecklistTemplate.query.all()
+    return render_template('manage_templates.html', templates=templates)
+
+@main.route('/add-template', methods=['POST'])
+@login_required
+def add_template():
+    if not current_user.is_admin:
+        flash('Access denied')
+        return redirect(url_for('main.dashboard'))
+    
+    name = request.form.get('template_name')
+    is_default = request.form.get('is_default') == 'true'
+    
+    if name:
+        template = ChecklistTemplate(name=name, is_default=is_default)
+        db.session.add(template)
+        db.session.commit()
+        flash('Template added successfully')
+    
+    return redirect(url_for('main.manage_templates'))
+
+@main.route('/edit-template/<int:template_id>', methods=['GET', 'POST'])
+@login_required
+def edit_template(template_id):
+    if not current_user.is_admin:
+        flash('Access denied')
+        return redirect(url_for('main.dashboard'))
+    
+    template = ChecklistTemplate.query.get_or_404(template_id)
+    
+    if request.method == 'POST':
+        # Handle template item updates
+        items_data = request.get_json()
+        
+        # Clear existing items
+        TemplateItem.query.filter_by(template_id=template_id).delete()
+        
+        # Add new items
+        for item in items_data:
+            new_item = TemplateItem(
+                description=item['description'],
+                category=item['category'],
+                template_id=template_id
+            )
+            db.session.add(new_item)
+        
+        db.session.commit()
+        return jsonify({'status': 'success'})
+    
+    return render_template('edit_template.html', template=template)
+
+@main.route('/edit-client-checklist/<int:client_id>', methods=['GET', 'POST'])
+@login_required
+def edit_client_checklist(client_id):
+    client = Client.query.get_or_404(client_id)
+    
+    if request.method == 'POST':
+        # Handle client checklist updates
+        items_data = request.get_json()
+        
+        # Clear existing items
+        ClientChecklist.query.filter_by(client_id=client_id).delete()
+        
+        # Add new items
+        for item in items_data:
+            new_item = ClientChecklist(
+                description=item['description'],
+                category=item['category'],
+                client_id=client_id
+            )
+            db.session.add(new_item)
+        
+        db.session.commit()
+        return jsonify({'status': 'success'})
+    
+    return render_template('edit_client_checklist.html', client=client)
+
+@main.route('/delete-client/<int:client_id>', methods=['POST'])
+@login_required
+def delete_client(client_id):
+    if not current_user.is_admin:
+        flash('Access denied')
+        return redirect(url_for('main.dashboard'))
+    
+    client = Client.query.get_or_404(client_id)
+    
+    try:
+        # Delete associated records first
+        ChecklistRecord.query.filter_by(client_id=client_id).delete()
+        db.session.delete(client)
+        db.session.commit()
+        flash(f'Client {client.name} has been deleted.')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error deleting client: {str(e)}')
+    
+    return redirect(url_for('main.manage_clients'))

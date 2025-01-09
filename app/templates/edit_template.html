@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="edit-template-container">
+    <h1>Edit Template: {{ template.name }}</h1>
+
+    <form id="templateForm" class="template-edit-form">
+        <div class="checklist-section">
+            <h2>Server Checklist</h2>
+            <div id="serverItems" class="items-list">
+                {% for item in template.items if item.category == 'Server' %}
+                <div class="checklist-item">
+                    <input type="text" value="{{ item.description }}" data-category="Server" class="item-input">
+                    <button type="button" class="remove-item">×</button>
+                </div>
+                {% endfor %}
+            </div>
+            <button type="button" onclick="addItem('Server')" class="button add-item">Add Server Item</button>
+        </div>
+
+        <div class="checklist-section">
+            <h2>Desktop Checklist</h2>
+            <div id="desktopItems" class="items-list">
+                {% for item in template.items if item.category == 'Desktop' %}
+                <div class="checklist-item">
+                    <input type="text" value="{{ item.description }}" data-category="Desktop" class="item-input">
+                    <button type="button" class="remove-item">×</button>
+                </div>
+                {% endfor %}
+            </div>
+            <button type="button" onclick="addItem('Desktop')" class="button add-item">Add Desktop Item</button>
+        </div>
+
+        <div class="form-actions">
+            <button type="submit" class="button">Save Changes</button>
+            <a href="{{ url_for('main.manage_templates') }}" class="button secondary">Cancel</a>
+        </div>
+    </form>
+</div>
+
+<style>
+.edit-template-container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+.checklist-section {
+    background: white;
+    padding: 20px;
+    margin: 20px 0;
+    border-radius: 5px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+
+.items-list {
+    margin-bottom: 15px;
+}
+
+.checklist-item {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.item-input {
+    flex: 1;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
+.remove-item {
+    background: #dc3545;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 0 10px;
+    cursor: pointer;
+}
+
+.add-item {
+    background: #28a745;
+    margin-top: 10px;
+}
+
+.form-actions {
+    margin-top: 20px;
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+}
+</style>
+
+<script>
+function addItem(category) {
+    const container = document.getElementById(`${category.toLowerCase()}Items`);
+    const itemDiv = document.createElement('div');
+    itemDiv.className = 'checklist-item';
+    itemDiv.innerHTML = `
+        <input type="text" data-category="${category}" class="item-input">
+        <button type="button" class="remove-item" onclick="this.parentElement.remove()">×</button>
+    `;
+    container.appendChild(itemDiv);
+}
+
+document.querySelectorAll('.remove-item').forEach(button => {
+    button.onclick = () => button.parentElement.remove();
+});
+
+document.getElementById('templateForm').onsubmit = async (e) => {
+    e.preventDefault();
+    
+    const items = [];
+    document.querySelectorAll('.item-input').forEach(input => {
+        if (input.value.trim()) {
+            items.push({
+                description: input.value.trim(),
+                category: input.dataset.category
+            });
+        }
+    });
+
+    try {
+        const response = await fetch(`{{ url_for('main.edit_template', template_id=template.id) }}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(items)
+        });
+
+        if (response.ok) {
+            window.location.href = "{{ url_for('main.manage_templates') }}";
+        }
+    } catch (error) {
+        console.error('Error saving template:', error);
+        alert('Error saving template. Please try again.');
+    }
+};
+</script>
+{% endblock %}

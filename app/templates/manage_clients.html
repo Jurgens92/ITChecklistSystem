@@ -7,6 +7,12 @@
         <h2>Add New Client</h2>
         <form method="POST" action="{{ url_for('main.add_client') }}" class="add-client-form">
             <input type="text" name="client_name" placeholder="Enter client name" required>
+            <select name="template_id">
+                <option value="">Select template (optional)</option>
+                {% for template in templates %}
+                <option value="{{ template.id }}">{{ template.name }}</option>
+                {% endfor %}
+            </select>
             <button type="submit" class="button">Add Client</button>
         </form>
     </div>
@@ -39,6 +45,14 @@
                             {{ 'Archive' if client.is_active else 'Activate' }}
                         </a>
                     </td>
+                    <td>
+                        <div class="action-buttons">
+                            <button onclick="deleteClient({{ client.id }}, '{{ client.name }}')" 
+                                    class="button delete-btn">
+                                Delete
+                            </button>
+                        </div>
+                    </td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -66,6 +80,25 @@ function filterClients() {
     }
 }
 </script>
+
+<script>
+    function deleteClient(clientId, clientName) {
+        if (confirm(`Are you sure you want to delete client "${clientName}"? This action cannot be undone.`)) {
+            fetch(`/delete-client/${clientId}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+            }).then(response => {
+                if (response.ok) {
+                    window.location.reload();
+                } else {
+                    alert('Error deleting client. Please try again.');
+                }
+            });
+        }
+    }
+    </script>
 
 <style>
 .manage-clients-container {
@@ -148,5 +181,19 @@ function filterClients() {
 .button.secondary {
     background-color: #6c757d;
 }
+
+.action-buttons {
+    display: flex;
+    gap: 10px;
+}
+
+.delete-btn {
+    background-color: #dc3545;
+}
+
+.delete-btn:hover {
+    background-color: #c82333;
+}
+
 </style>
 {% endblock %}

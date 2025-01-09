@@ -24,12 +24,13 @@
         </div>
 
         {% if current_user.is_admin %}
-            <div class="admin-controls">
-                <h2>Admin Controls</h2>
-                <a href="{{ url_for('main.manage_clients') }}" class="button">Manage Clients</a>
-                <a href="{{ url_for('main.manage_users') }}" class="button">Manage Users</a>
-                <a href="{{ url_for('main.reports') }}" class="button">View Reports</a>
-            </div>
+        <div class="admin-controls">
+            <h2>Admin Controls</h2>
+            <a href="{{ url_for('main.manage_clients') }}" class="button">Manage Clients</a>
+            <a href="{{ url_for('main.manage_users') }}" class="button">Manage Users</a>
+            <a href="{{ url_for('main.manage_templates') }}" class="button">Manage Templates</a>
+            <a href="{{ url_for('main.reports') }}" class="button">View Reports</a>
+        </div>
         {% endif %}
     </div>
 </div>
