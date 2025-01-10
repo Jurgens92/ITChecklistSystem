@@ -29,9 +29,8 @@ def init_db():
             
             # Create some test clients
             clients = [
-                Client(name='Client 1'),
-                Client(name='Client 2'),
-                Client(name='Client 3')
+                Client(name='Client 1')
+               
             ]
             for client in clients:
                 db.session.add(client)
