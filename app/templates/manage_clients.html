@@ -6,14 +6,16 @@
     <div class="add-client-section">
         <h2>Add New Client</h2>
         <form method="POST" action="{{ url_for('main.add_client') }}" class="add-client-form">
-            <input type="text" name="client_name" placeholder="Enter client name" required>
-            <select name="template_id">
-             <!--   <option value="">Select template (optional)</option> -->
-             <!--   {% for template in templates %} -->
-                <option value="{{ template.id }}">{{ template.name }}</option>
-                {% endfor %}
-            </select>
-            <button type="submit" class="button">Add Client</button>
+            <div class="form-group">
+                <input type="text" name="client_name" placeholder="Enter client name" required>
+                <select name="template_id">
+                 <!--   <option value="">Select template (optional)</option> -->
+                    {% for template in templates %}
+                    <option value="{{ template.id }}">{{ template.name }}</option>
+                    {% endfor %}
+                </select>
+                <button type="submit" class="button">Add Client</button>
+            </div>
         </form>
     </div>
 

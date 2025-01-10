@@ -33,6 +33,7 @@ def logout():
 @login_required
 def client_checklist(client_id):
     client = Client.query.get_or_404(client_id)
+    # Get the template associated with this client
     server_items = ChecklistItem.query.filter_by(category='Server').all()
     desktop_items = ChecklistItem.query.filter_by(category='Desktop').all()
     return render_template('checklist.html', 
@@ -165,19 +166,21 @@ def add_client():
         else:
             new_client = Client(name=client_name, is_active=True)
             db.session.add(new_client)
-            db.session.flush()  # Get the new client ID
-            
-            # If no template selected, use default template
-            if not template_id:
-                template = ChecklistTemplate.query.filter_by(is_default=True).first()
-            else:
+            db.session.commit()  # Commit to get the new client ID
+
+            # Get the template - either selected or default
+            template = None
+            if template_id:
                 template = ChecklistTemplate.query.get(template_id)
+            if not template:
+                template = ChecklistTemplate.query.filter_by(is_default=True).first()
             
             if template:
-                for item in template.items:
+                # Create checklist items from template items
+                for template_item in template.items:
                     checklist_item = ChecklistItem(
-                        description=item.description,
-                        category=item.category
+                        description=template_item.description,
+                        category=template_item.category
                     )
                     db.session.add(checklist_item)
             
