@@ -1,5 +1,5 @@
 from app import create_app, db
-from app.models import User, Client, ChecklistItem, ChecklistRecord, CompletedItem
+from app.models import User, Client, ChecklistItem, ChecklistRecord, CompletedItem, ChecklistTemplate, TemplateItem, ClientChecklist
 from werkzeug.security import generate_password_hash
 
 app = create_app()
@@ -31,6 +31,10 @@ def init_db():
             for client in clients:
                 db.session.add(client)
             
+            # Create default template
+            default_template = ChecklistTemplate(name='Default Template', is_default=True)
+            db.session.add(default_template)
+            
             # Create server checklist items
             server_items = [
                 'Server Access Reviewed',
@@ -57,13 +61,14 @@ def init_db():
                 'Monthly Reporting'
             ]
             
-            # Add server items to database
+            # Add items to template
             for item in server_items:
-                db.session.add(ChecklistItem(description=item, category='Server'))
+                template_item = TemplateItem(description=item, category='Server', template_id=default_template.id)
+                db.session.add(template_item)
             
-            # Add desktop items to database
             for item in desktop_items:
-                db.session.add(ChecklistItem(description=item, category='Desktop'))
+                template_item = TemplateItem(description=item, category='Desktop', template_id=default_template.id)
+                db.session.add(template_item)
             
             try:
                 db.session.commit()

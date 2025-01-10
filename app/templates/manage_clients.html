@@ -8,8 +8,8 @@
         <form method="POST" action="{{ url_for('main.add_client') }}" class="add-client-form">
             <input type="text" name="client_name" placeholder="Enter client name" required>
             <select name="template_id">
-                <option value="">Select template (optional)</option>
-                {% for template in templates %}
+             <!--   <option value="">Select template (optional)</option> -->
+             <!--   {% for template in templates %} -->
                 <option value="{{ template.id }}">{{ template.name }}</option>
                 {% endfor %}
             </select>

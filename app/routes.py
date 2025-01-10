@@ -1,6 +1,6 @@
-from flask import Blueprint, render_template, redirect, url_for, flash, request
+from flask import Blueprint, render_template, redirect, url_for, flash, request, jsonify
 from flask_login import login_user, logout_user, login_required, current_user
-from app.models import User, Client, ChecklistItem, ChecklistRecord, CompletedItem, ChecklistTemplate, TemplateItem 
+from app.models import User, Client, ChecklistItem, ChecklistRecord, CompletedItem, ChecklistTemplate, TemplateItem, ClientChecklist
 from app import db
 from sqlalchemy import func
 from datetime import datetime, timedelta
@@ -167,21 +167,42 @@ def add_client():
             db.session.add(new_client)
             db.session.flush()  # Get the new client ID
             
-            # Apply template if selected
-            if template_id:
+            # If no template selected, use default template
+            if not template_id:
+                template = ChecklistTemplate.query.filter_by(is_default=True).first()
+            else:
                 template = ChecklistTemplate.query.get(template_id)
-                if template:
-                    for item in template.items:
-                        client_item = ClientChecklist(
-                            client_id=new_client.id,
-                            description=item.description,
-                            category=item.category
-                        )
-                        db.session.add(client_item)
+            
+            if template:
+                for item in template.items:
+                    checklist_item = ChecklistItem(
+                        description=item.description,
+                        category=item.category
+                    )
+                    db.session.add(checklist_item)
             
             db.session.commit()
             flash('Client added successfully.')
+    
     return redirect(url_for('main.manage_clients'))
+
+@main.route('/delete-template/<int:template_id>', methods=['POST'])
+@login_required
+def delete_template(template_id):
+    if not current_user.is_admin:
+        flash('Access denied')
+        return redirect(url_for('main.dashboard'))
+    
+    template = ChecklistTemplate.query.get_or_404(template_id)
+    
+    try:
+        # Delete associated template items first (should happen automatically with cascade)
+        db.session.delete(template)
+        db.session.commit()
+        return jsonify({'status': 'success'})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'status': 'error', 'message': str(e)}), 500
 
 @main.route('/toggle-client/<int:client_id>')
 @login_required
@@ -317,7 +338,9 @@ def edit_template(template_id):
             db.session.add(new_item)
         
         db.session.commit()
-        return jsonify({'status': 'success'})
+        return ({'status': 'success'})
+        
+    
     
     return render_template('edit_template.html', template=template)
 
@@ -331,11 +354,11 @@ def edit_client_checklist(client_id):
         items_data = request.get_json()
         
         # Clear existing items
-        ClientChecklist.query.filter_by(client_id=client_id).delete()
+        client_checklist.query.filter_by(client_id=client_id).delete()
         
         # Add new items
         for item in items_data:
-            new_item = ClientChecklist(
+            new_item = client_checklist(
                 description=item['description'],
                 category=item['category'],
                 client_id=client_id
@@ -343,7 +366,7 @@ def edit_client_checklist(client_id):
             db.session.add(new_item)
         
         db.session.commit()
-        return jsonify({'status': 'success'})
+        return ({'status': 'success'})
     
     return render_template('edit_client_checklist.html', client=client)
 

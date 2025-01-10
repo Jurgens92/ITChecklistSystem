@@ -110,7 +110,12 @@ function deleteTemplate(templateId) {
         }).then(response => {
             if (response.ok) {
                 window.location.reload();
+            } else {
+                alert('Error deleting template. Please try again.');
             }
+        }).catch(error => {
+            console.error('Error:', error);
+            alert('Error deleting template. Please try again.');
         });
     }
 }
