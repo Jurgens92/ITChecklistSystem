@@ -6,19 +6,18 @@ from app.models import (
     ChecklistItem,
     ChecklistRecord,
     ChecklistTemplate,
+    CompletedItem,
     TemplateItem,
 )
 from app import db
-from sqlalchemy import func
+from sqlalchemy import func, text
 from datetime import datetime, timedelta
 
 from io import BytesIO
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.units import inch
+from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
-from datetime import datetime
 
 main = Blueprint("main", __name__)
 
@@ -70,13 +69,16 @@ def submit_checklist():
     db.session.add(record)
     db.session.commit()
 
-    completed_items = list(map(int, request.form.getlist("items")))
-    # update all items that were completed
-    db.session.query(ChecklistItem).filter(ChecklistItem.id.in_(completed_items)).update(
-        {"completed": True, "record_id": record.id}
-    )
-    # uncheck all items that were not completed
-    db.session.query(ChecklistItem).filter(~ChecklistItem.id.in_(completed_items)).filter(ChecklistItem.client_id==client_id).update({"completed": False, "record_id": None})
+    completed_items = request.form.getlist('items')
+    for item_id in completed_items:
+        completed_item = CompletedItem(
+            record_id=record.id,
+            checklist_item_id=int(item_id),
+            completed=True
+        )
+        db.session.add(completed_item)
+
+
     db.session.commit()
     flash("Checklist submitted successfully")
     return redirect(url_for("main.dashboard"))
@@ -186,10 +188,22 @@ def export_client_report(client_id):
         return redirect(url_for("main.dashboard"))
 
     client = Client.query.get_or_404(client_id)
-    records = (
-        ChecklistRecord.query.filter_by(client_id=client_id)
-        .order_by(ChecklistRecord.date_performed.desc())
-        .all()
+    records = db.session.execute(
+        text(''''
+            SELECT 
+               cr.date_performed as date_performed,
+               us.username as username,
+               che.category as category,
+               che.description as description,
+               com.completed as completed
+            from completed_item com
+                join checklist_record cr on cr.id == com.record_id 
+                join user us on us.id == cr.user_id
+                join checklist_item che on che.id == com.checklist_item_id
+            where cr.client_id = :client_id
+                '''),
+        {"client_id": client_id}
+
     )
 
     buffer = BytesIO()
@@ -231,14 +245,14 @@ def export_client_report(client_id):
     table_data = [['Date', 'Performed by', 'Category', 'Item', 'Status']]
     
     for record in records:
-        for item in record.items_completed:
-            table_data.append([
-                record.date_performed.strftime('%Y-%m-%d %H:%M'),
-                record.user.username,
-                item.category,
-                Paragraph(item.description, styles['Normal']),  # Wrap long text
-                'Completed' if item.completed else 'Not Completed'
-            ])
+        date_performed = datetime.fromisoformat(record.date_performed)
+        table_data.append([
+            date_performed.strftime('%Y-%m-%d %H:%M'),
+            record.username,
+            record.category,
+            Paragraph(record.description, styles['Normal']),  # Wrap long text
+            'Completed' if record.completed else 'Not Completed'
+        ])
 
     if len(table_data) > 1:
         table = Table(table_data, colWidths=col_widths, repeatRows=1)
@@ -321,7 +335,6 @@ def add_client():
                         client_id=new_client.id,
                         description=template_item.description,
                         category=template_item.category,
-                        completed=False,
                     )
                     db.session.add(checklist_item)
 

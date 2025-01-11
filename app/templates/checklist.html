@@ -11,7 +11,7 @@
             {% for item in server_items %}
             <div class="checklist-item">
                 <label>
-          <input type="checkbox" name="items" value="{{ item.id }}" {{ 'checked' if item.completed else '' }} >
+                    <input type="checkbox" name="items" value="{{ item.id }}">
                     {{ item.description }}
                 </label>
             </div>
@@ -23,7 +23,7 @@
             {% for item in desktop_items %}
             <div class="checklist-item">
                 <label>
-                    <input type="checkbox" name="items" value="{{ item.id }}" {{ 'checked' if item.completed else '' }}>
+                    <input type="checkbox" name="items" value="{{ item.id }}">
                     {{ item.description }}
                 </label>
             </div>

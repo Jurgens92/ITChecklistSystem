@@ -27,16 +27,20 @@ class ChecklistItem(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     client_id = db.Column(db.Integer, db.ForeignKey('client.id'))
     description = db.Column(db.String(200), nullable=False)
-    record_id = db.Column(db.Integer, db.ForeignKey('checklist_record.id'))
     category = db.Column(db.String(50))
-    completed = db.Column(db.Boolean, default=False)
 
 class ChecklistRecord(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     client_id = db.Column(db.Integer, db.ForeignKey('client.id'))
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
     date_performed = db.Column(db.DateTime, default=datetime.utcnow)
-    items_completed = db.relationship('ChecklistItem', backref='record')
+    items_completed = db.relationship('CompletedItem', backref='record')
+
+class CompletedItem(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    record_id = db.Column(db.Integer, db.ForeignKey('checklist_record.id'))
+    checklist_item_id = db.Column(db.Integer, db.ForeignKey('checklist_item.id'))
+    completed = db.Column(db.Boolean, default=False)
 
 class ChecklistTemplate(db.Model):
     id = db.Column(db.Integer, primary_key=True)
