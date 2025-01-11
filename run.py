@@ -1,6 +1,5 @@
 from app import create_app, db
-from app.models import User, Client, ChecklistItem, ChecklistRecord, CompletedItem, ChecklistTemplate, TemplateItem, ClientChecklist
-from werkzeug.security import generate_password_hash
+from app.models import User, Client, ChecklistTemplate, TemplateItem
 
 app = create_app()
 
