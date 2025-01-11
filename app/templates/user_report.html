@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="report-container">
+    <h1>User Report: {{ user.username }}</h1>
+    
+    <div class="report-section">
+        <h2>Checklist History</h2>
+        {% if records %}
+        <table class="report-table">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Client</th>
+                    <th>Items Completed</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for record in records %}
+                <tr>
+                    <td>{{ record.date_performed.strftime('%Y-%m-%d %H:%M') }}</td>
+                    <td>{{ record.client.name }}</td>
+                    <td>{{ record.items_completed|length }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p>No checklist records found for this user.</p>
+        {% endif %}
+    </div>
+    
+    <div class="report-actions">
+        <a href="{{ url_for('main.reports') }}" class="button secondary">Back to Reports</a>
+    </div>
+</div>
+{% endblock %}
