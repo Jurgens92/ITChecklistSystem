@@ -6,6 +6,7 @@ from app.models import (
     ChecklistItem,
     ChecklistRecord,
     ChecklistTemplate,
+    CompletedItem,
     TemplateItem,
 )
 from app import db
@@ -15,10 +16,8 @@ from datetime import datetime, timedelta
 from io import BytesIO
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.units import inch
+from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
-from datetime import datetime
 
 main = Blueprint("main", __name__)
 
@@ -70,13 +69,16 @@ def submit_checklist():
     db.session.add(record)
     db.session.commit()
 
-    completed_items = list(map(int, request.form.getlist("items")))
-    # update all items that were completed
-    db.session.query(ChecklistItem).filter(ChecklistItem.id.in_(completed_items)).update(
-        {"completed": True, "record_id": record.id}
-    )
-    # uncheck all items that were not completed
-    db.session.query(ChecklistItem).filter(~ChecklistItem.id.in_(completed_items)).filter(ChecklistItem.client_id==client_id).update({"completed": False, "record_id": None})
+    completed_items = request.form.getlist('items')
+    for item_id in completed_items:
+        completed_item = CompletedItem(
+            record_id=record.id,
+            checklist_item_id=int(item_id),
+            completed=True
+        )
+        db.session.add(completed_item)
+
+
     db.session.commit()
     flash("Checklist submitted successfully")
     return redirect(url_for("main.dashboard"))
@@ -321,7 +323,6 @@ def add_client():
                         client_id=new_client.id,
                         description=template_item.description,
                         category=template_item.category,
-                        completed=False,
                     )
                     db.session.add(checklist_item)
 
