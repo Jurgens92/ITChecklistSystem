@@ -189,7 +189,7 @@ def export_client_report(client_id):
 
     client = Client.query.get_or_404(client_id)
     records = db.session.execute(
-        text(''''
+        text('''
             SELECT 
                cr.date_performed as date_performed,
                us.username as username,
@@ -200,8 +200,7 @@ def export_client_report(client_id):
                 join checklist_record cr on cr.id == com.record_id 
                 join user us on us.id == cr.user_id
                 join checklist_item che on che.id == com.checklist_item_id
-            where cr.client_id = :client_id
-                '''),
+            where cr.client_id = :client_id'''),
         {"client_id": client_id}
 
     )
