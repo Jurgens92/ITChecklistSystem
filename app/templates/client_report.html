@@ -5,6 +5,9 @@
     
     <div class="report-section">
         <h2>Checklist History</h2>
+        <div class="report-actions">
+            <a href="{{ url_for('main.export_client_report', client_id=client.id) }}" class="button export-btn">Export to PDF</a>
+        </div>
         {% if records %}
         <table class="report-table">
             <thead>
@@ -32,5 +35,18 @@
     <div class="report-actions">
         <a href="{{ url_for('main.reports') }}" class="button secondary">Back to Reports</a>
     </div>
+
 </div>
+
+<style>
+    .export-btn {
+        background-color: #28a745;
+        margin-bottom: 20px;
+    }
+    
+    .export-btn:hover {
+        background-color: #218838;
+    }
+    </style>
+
 {% endblock %}
