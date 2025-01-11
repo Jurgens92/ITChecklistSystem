@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, redirect, url_for, flash, request, jsonify
+from flask import Blueprint, render_template, redirect, url_for, flash, request, jsonify, send_file
 from flask_login import login_user, logout_user, login_required, current_user
 from app.models import (
     User,
@@ -11,6 +11,14 @@ from app.models import (
 from app import db
 from sqlalchemy import func
 from datetime import datetime, timedelta
+
+from io import BytesIO
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import letter
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import inch
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from datetime import datetime
 
 main = Blueprint("main", __name__)
 
@@ -170,6 +178,104 @@ def summary_report():
         active_users=active_users,
     )
 
+@main.route("/export-client-report/<int:client_id>")
+@login_required
+def export_client_report(client_id):
+    if not current_user.is_admin:
+        flash("Access denied")
+        return redirect(url_for("main.dashboard"))
+
+    client = Client.query.get_or_404(client_id)
+    records = (
+        ChecklistRecord.query.filter_by(client_id=client_id)
+        .order_by(ChecklistRecord.date_performed.desc())
+        .all()
+    )
+
+    buffer = BytesIO()
+    
+    # Create the PDF object with wider margins
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=letter,
+        rightMargin=36,  # Reduced margins (0.5 inch)
+        leftMargin=36,
+        topMargin=36,
+        bottomMargin=36
+    )
+
+    elements = []
+    styles = getSampleStyleSheet()
+    title_style = styles['Heading1']
+    
+    # Add title
+    elements.append(Paragraph(f"Checklist Report - {client.name}", title_style))
+    elements.append(Spacer(1, 20))
+    
+    # Generate report date
+    report_date = datetime.now().strftime("%Y-%m-%d %H:%M")
+    elements.append(Paragraph(f"Generated: {report_date}", styles['Normal']))
+    elements.append(Spacer(1, 20))
+
+    # Calculate column widths as percentages of page width
+    page_width = letter[0] - 72  # Total width minus margins
+    col_widths = [
+        page_width * 0.15,  # Date
+        page_width * 0.15,  # Performed by
+        page_width * 0.15,  # Category
+        page_width * 0.40,  # Item (wider for long descriptions)
+        page_width * 0.15   # Status
+    ]
+
+    # Prepare data for the table
+    table_data = [['Date', 'Performed by', 'Category', 'Item', 'Status']]
+    
+    for record in records:
+        for item in record.items_completed:
+            table_data.append([
+                record.date_performed.strftime('%Y-%m-%d %H:%M'),
+                record.user.username,
+                item.category,
+                Paragraph(item.description, styles['Normal']),  # Wrap long text
+                'Completed' if item.completed else 'Not Completed'
+            ])
+
+    if len(table_data) > 1:
+        table = Table(table_data, colWidths=col_widths, repeatRows=1)
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 12),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.white),
+            ('TEXTCOLOR', (0, 1), (-1, -1), colors.black),
+            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+            ('FONTSIZE', (0, 1), (-1, -1), 10),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.lightgrey]),
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),  # Align text to top
+            ('WORDWRAP', (0, 0), (-1, -1), True),  # Enable word wrapping
+            ('LEFTPADDING', (0, 0), (-1, -1), 6),  # Add some padding
+            ('RIGHTPADDING', (0, 0), (-1, -1), 6)
+        ]))
+        elements.append(table)
+    else:
+        elements.append(Paragraph("No records found", styles['Normal']))
+
+    # Build PDF
+    doc.build(elements)
+    
+    pdf = buffer.getvalue()
+    buffer.close()
+    
+    return send_file(
+        BytesIO(pdf),
+        mimetype='application/pdf',
+        as_attachment=True,
+        download_name=f'{client.name}_checklist_report.pdf'
+    )
 
 @main.route("/manage-clients")
 @login_required
