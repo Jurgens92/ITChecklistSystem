@@ -10,7 +10,7 @@ from app.models import (
     TemplateItem,
 )
 from app import db
-from sqlalchemy import func
+from sqlalchemy import func, text
 from datetime import datetime, timedelta
 
 from io import BytesIO
@@ -188,10 +188,22 @@ def export_client_report(client_id):
         return redirect(url_for("main.dashboard"))
 
     client = Client.query.get_or_404(client_id)
-    records = (
-        ChecklistRecord.query.filter_by(client_id=client_id)
-        .order_by(ChecklistRecord.date_performed.desc())
-        .all()
+    records = db.session.execute(
+        text(''''
+            SELECT 
+               cr.date_performed as date_performed,
+               us.username as username,
+               che.category as category,
+               che.description as description,
+               com.completed as completed
+            from completed_item com
+                join checklist_record cr on cr.id == com.record_id 
+                join user us on us.id == cr.user_id
+                join checklist_item che on che.id == com.checklist_item_id
+            where cr.client_id = :client_id
+                '''),
+        {"client_id": client_id}
+
     )
 
     buffer = BytesIO()
@@ -233,14 +245,14 @@ def export_client_report(client_id):
     table_data = [['Date', 'Performed by', 'Category', 'Item', 'Status']]
     
     for record in records:
-        for item in record.items_completed:
-            table_data.append([
-                record.date_performed.strftime('%Y-%m-%d %H:%M'),
-                record.user.username,
-                item.category,
-                Paragraph(item.description, styles['Normal']),  # Wrap long text
-                'Completed' if item.completed else 'Not Completed'
-            ])
+        date_performed = datetime.fromisoformat(record.date_performed)
+        table_data.append([
+            date_performed.strftime('%Y-%m-%d %H:%M'),
+            record.username,
+            record.category,
+            Paragraph(record.description, styles['Normal']),  # Wrap long text
+            'Completed' if record.completed else 'Not Completed'
+        ])
 
     if len(table_data) > 1:
         table = Table(table_data, colWidths=col_widths, repeatRows=1)
