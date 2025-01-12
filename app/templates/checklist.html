@@ -1,3 +1,4 @@
+<!-- checklist.html -->
 {% extends "base.html" %}
 {% block content %}
 <div class="checklist-container">
@@ -6,29 +7,20 @@
     <form method="POST" action="{{ url_for('main.submit_checklist') }}">
         <input type="hidden" name="client_id" value="{{ client.id }}">
         
+        {% for category, items in items_by_category.items() %}
         <div class="checklist-section">
-            <h2>Server Checklist</h2>
-            {% for item in server_items %}
+            <h2>{{ category.name }}</h2>
+            {% for item in items %}
             <div class="checklist-item">
                 <label>
-                    <input type="checkbox" name="items" value="{{ item.id }}">
+                    <input type="checkbox" name="items" value="{{ item.id }}" 
+                           {% if item.completed %}checked{% endif %}>
                     {{ item.description }}
                 </label>
             </div>
             {% endfor %}
         </div>
-
-        <div class="checklist-section">
-            <h2>Desktop Checklist</h2>
-            {% for item in desktop_items %}
-            <div class="checklist-item">
-                <label>
-                    <input type="checkbox" name="items" value="{{ item.id }}">
-                    {{ item.description }}
-                </label>
-            </div>
-            {% endfor %}
-        </div>
+        {% endfor %}
 
         <div class="form-actions">
             <button type="submit" class="button">Submit Checklist</button>
@@ -37,4 +29,3 @@
     </form>
 </div>
 {% endblock %}
-

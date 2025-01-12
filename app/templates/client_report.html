@@ -22,7 +22,7 @@
                 <tr>
                     <td>{{ record.date_performed.strftime('%Y-%m-%d %H:%M') }}</td>
                     <td>{{ record.user.username }}</td>
-                    <td>{{ record.items_completed|length }}</td>
+                    <td>{{ record.completed_count }}</td>
                 </tr>
                 {% endfor %}
             </tbody>
