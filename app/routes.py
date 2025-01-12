@@ -8,6 +8,7 @@ from app.models import (
     ChecklistTemplate,
     CompletedItem,
     TemplateItem,
+    ChecklistCategory,
 )
 from app import db
 from sqlalchemy import func, text
@@ -50,39 +51,85 @@ def logout():
 @login_required
 def client_checklist(client_id):
     client = Client.query.get_or_404(client_id)
-    # Get the template associated with this client
-    server_items = ChecklistItem.query.filter_by(client_id=client_id, category="Server").all()
-    desktop_items = ChecklistItem.query.filter_by(client_id=client_id, category="Desktop").all()
+    
+    # Get the default template
+    default_template = ChecklistTemplate.query.filter_by(is_default=True).first()
+    if not default_template:
+        flash("No default template found. Please create one first.")
+        return redirect(url_for("main.dashboard"))
+    
+    # Get all categories for this template
+    categories = ChecklistCategory.query.filter_by(template_id=default_template.id).all()
+    
+    items_by_category = {}
+    for category in categories:
+        # Get existing items for this client and category
+        items = ChecklistItem.query.filter_by(
+            client_id=client_id,
+            category_id=category.id
+        ).all()
+        
+        # If no items exist, create them from template
+        if not items:
+            template_items = TemplateItem.query.filter_by(
+                template_id=default_template.id,
+                category_id=category.id
+            ).all()
+            
+            items = []
+            for template_item in template_items:
+                item = ChecklistItem(
+                    client_id=client_id,
+                    description=template_item.description,
+                    category_id=category.id,
+                    completed=False
+                )
+                db.session.add(item)
+                items.append(item)
+            
+            db.session.commit()
+        
+        items_by_category[category] = items
+
     return render_template(
         "checklist.html",
         client=client,
-        server_items=server_items,
-        desktop_items=desktop_items,
+        items_by_category=items_by_category
     )
 
 @main.route("/submit_checklist", methods=["POST"])
 @login_required
 def submit_checklist():
     client_id = request.form.get("client_id")
-
-    record = ChecklistRecord(client_id=client_id, user_id=current_user.id)
+    if not client_id:
+        flash("No client specified")
+        return redirect(url_for("main.dashboard"))
+        
+    completed_item_ids = request.form.getlist("items")
+    
+    # Create a new checklist record
+    record = ChecklistRecord(
+        client_id=client_id,
+        user_id=current_user.id
+    )
     db.session.add(record)
     db.session.commit()
-
-    completed_items = request.form.getlist('items')
-    for item_id in completed_items:
+    
+    # Get all checklist items for this client
+    client_items = ChecklistItem.query.filter_by(client_id=client_id).all()
+    
+    # Create completed items entries
+    for item in client_items:
         completed_item = CompletedItem(
             record_id=record.id,
-            checklist_item_id=int(item_id),
-            completed=True
+            checklist_item_id=item.id,
+            completed=str(item.id) in completed_item_ids
         )
         db.session.add(completed_item)
-
-
+    
     db.session.commit()
     flash("Checklist submitted successfully")
     return redirect(url_for("main.dashboard"))
-
 
 @main.route("/reports")
 @login_required
@@ -191,18 +238,21 @@ def export_client_report(client_id):
     records = db.session.execute(
         text('''
             SELECT 
-               cr.date_performed as date_performed,
-               us.username as username,
-               che.category as category,
-               che.description as description,
-               com.completed as completed
-            from completed_item com
-                join checklist_record cr on cr.id == com.record_id 
-                join user us on us.id == cr.user_id
-                join checklist_item che on che.id == com.checklist_item_id
-            where cr.client_id = :client_id'''),
+                cr.date_performed as date_performed,
+                us.username as username,
+                che.category as category,
+                che.description as description,
+                com.completed as completed,
+                (SELECT COUNT(*) 
+                 FROM completed_item ci 
+                 WHERE ci.record_id = cr.id AND ci.completed = true) as completed_count
+            FROM completed_item com
+            JOIN checklist_record cr ON cr.id = com.record_id 
+            JOIN user us ON us.id = cr.user_id
+            JOIN checklist_item che ON che.id = com.checklist_item_id
+            WHERE cr.client_id = :client_id
+            ORDER BY cr.date_performed DESC'''),
         {"client_id": client_id}
-
     )
 
     buffer = BytesIO()
@@ -318,22 +368,20 @@ def add_client():
         else:
             new_client = Client(name=client_name, is_active=True)
             db.session.add(new_client)
-            db.session.commit()  # Commit to get the new client ID
+            db.session.commit()
 
-            # Get the template - either selected or default
-            template = None
-            if template_id:
-                template = ChecklistTemplate.query.get(template_id)
-            if not template:
-                template = ChecklistTemplate.query.filter_by(is_default=True).first()
+            # Get the template
+            template = ChecklistTemplate.query.get(template_id) if template_id else ChecklistTemplate.query.filter_by(is_default=True).first()
 
             if template:
                 # Create checklist items from template items
-                for template_item in template.items:
+                template_items = TemplateItem.query.filter_by(template_id=template.id).all()
+                for template_item in template_items:
                     checklist_item = ChecklistItem(
                         client_id=new_client.id,
                         description=template_item.description,
-                        category=template_item.category,
+                        category_id=template_item.category_id,
+                        completed=False
                     )
                     db.session.add(checklist_item)
 
@@ -361,6 +409,31 @@ def delete_template(template_id):
         db.session.rollback()
         return jsonify({"status": "error", "message": str(e)}), 500
 
+@main.route('/add-category/<int:template_id>', methods=['POST'])
+@login_required
+def add_category(template_id):
+    if not current_user.is_admin:
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    data = request.get_json()
+    category = ChecklistCategory(
+        name=data['name'],
+        template_id=template_id
+    )
+    db.session.add(category)
+    db.session.commit()
+    return jsonify({'status': 'success'})
+
+@main.route('/delete-category/<int:category_id>', methods=['POST'])
+@login_required
+def delete_category(category_id):
+    if not current_user.is_admin:
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    category = ChecklistCategory.query.get_or_404(category_id)
+    db.session.delete(category)
+    db.session.commit()
+    return jsonify({'status': 'success'})
 
 @main.route("/toggle-client/<int:client_id>")
 @login_required
@@ -485,28 +558,45 @@ def edit_template(template_id):
         return redirect(url_for("main.dashboard"))
 
     template = ChecklistTemplate.query.get_or_404(template_id)
+    categories = ChecklistCategory.query.filter_by(template_id=template_id).all()
 
     if request.method == "POST":
-        # Handle template item updates
-        items_data = request.get_json()
+        try:
+            data = request.get_json()
+            if not data or 'items' not in data:
+                return jsonify({"status": "error", "message": "No items data provided"}), 400
 
-        # Clear existing items
-        TemplateItem.query.filter_by(template_id=template_id).delete()
+            # Begin transaction
+            # Delete existing template items
+            TemplateItem.query.filter_by(template_id=template_id).delete()
 
-        # Add new items
-        for item in items_data:
-            new_item = TemplateItem(
-                description=item["description"],
-                category=item["category"],
-                template_id=template_id,
-            )
-            db.session.add(new_item)
+            # Add new items
+            for item_data in data['items']:
+                if 'description' not in item_data or 'category_id' not in item_data:
+                    continue
+                    
+                new_item = TemplateItem(
+                    description=item_data['description'],
+                    category_id=item_data['category_id'],
+                    template_id=template_id
+                )
+                db.session.add(new_item)
 
-        db.session.commit()
-        return {"status": "success"}
+            db.session.commit()
+            return jsonify({"status": "success"})
 
-    return render_template("edit_template.html", template=template)
+        except Exception as e:
+            db.session.rollback()
+            print(f"Error saving template: {str(e)}")  # For debugging
+            return jsonify({"status": "error", "message": str(e)}), 500
 
+    # GET request - render the template edit form
+    template_items = TemplateItem.query.filter_by(template_id=template_id).all()
+    return render_template(
+        "edit_template.html", 
+        template=template, 
+        categories=categories
+    )
 
 @main.route("/edit-client-checklist/<int:client_id>", methods=["GET", "POST"])
 @login_required

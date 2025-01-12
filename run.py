@@ -7,7 +7,6 @@ def init_db():
     with app.app_context():
         db.create_all()
         
-        # Check if we already have data
         if User.query.first() is None:
             print("Initializing database with sample data...")
             
@@ -25,16 +24,15 @@ def init_db():
             default_template = ChecklistTemplate(name='Default Template', is_default=True)
             db.session.add(default_template)
             db.session.commit()  # Commit to get template ID
-            
-            # Create some test clients
-            clients = [
-                Client(name='Client 1')
-               
-            ]
-            for client in clients:
-                db.session.add(client)
-            
-            # Create server checklist items if they don't exist
+
+            # Create default categories
+            server_category = ChecklistCategory(name='Server', template_id=default_template.id)
+            desktop_category = ChecklistCategory(name='Desktop', template_id=default_template.id)
+            db.session.add(server_category)
+            db.session.add(desktop_category)
+            db.session.commit()
+
+            # Server checklist items
             server_items = [
                 'Server Access Reviewed',
                 'Firewall Rules Reviewed',
@@ -48,7 +46,7 @@ def init_db():
                 'Antivirus Logs and Updates'
             ]
             
-            # Create desktop checklist items
+            # Desktop checklist items
             desktop_items = [
                 'Computer Updates (windows and Apps)',
                 'Scans and Checks (event logs, antivirus)',
@@ -60,24 +58,24 @@ def init_db():
                 'Monthly Reporting'
             ]
 
-
-               # Add items to template
+            # Add server items to template
             for item in server_items:
                 template_item = TemplateItem(
                     description=item,
-                    category='Server',
+                    category_id=server_category.id,
                     template_id=default_template.id
                 )
                 db.session.add(template_item)
             
+            # Add desktop items to template
             for item in desktop_items:
                 template_item = TemplateItem(
                     description=item,
-                    category='Desktop',
+                    category_id=desktop_category.id,
                     template_id=default_template.id
                 )
                 db.session.add(template_item)
-            
+
             try:
                 db.session.commit()
                 print("Database initialized successfully!")

@@ -27,7 +27,9 @@ class ChecklistItem(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     client_id = db.Column(db.Integer, db.ForeignKey('client.id'))
     description = db.Column(db.String(200), nullable=False)
-    category = db.Column(db.String(50))
+    record_id = db.Column(db.Integer, db.ForeignKey('checklist_record.id'))
+    category_id = db.Column(db.Integer, db.ForeignKey('checklist_category.id'))
+    completed = db.Column(db.Boolean, default=False)
 
 class ChecklistRecord(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -35,6 +37,10 @@ class ChecklistRecord(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
     date_performed = db.Column(db.DateTime, default=datetime.utcnow)
     items_completed = db.relationship('CompletedItem', backref='record')
+
+    @property
+    def completed_count(self):
+        return CompletedItem.query.filter_by(record_id=self.id, completed=True).count()
 
 class CompletedItem(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -48,10 +54,16 @@ class ChecklistTemplate(db.Model):
     is_default = db.Column(db.Boolean, default=False)
     items = db.relationship('TemplateItem', backref='template', cascade='all, delete-orphan')
 
+class ChecklistCategory(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(50), nullable=False)
+    template_id = db.Column(db.Integer, db.ForeignKey('checklist_template.id'))
+    items = db.relationship('TemplateItem', backref='category', cascade='all, delete-orphan')
+    
 class TemplateItem(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     description = db.Column(db.String(200), nullable=False)
-    category = db.Column(db.String(50))
+    category_id = db.Column(db.Integer, db.ForeignKey('checklist_category.id'))
     template_id = db.Column(db.Integer, db.ForeignKey('checklist_template.id'))
     
 class ClientChecklist(db.Model):
