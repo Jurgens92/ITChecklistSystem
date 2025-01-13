@@ -181,16 +181,23 @@ document.getElementById('templateForm').onsubmit = async (e) => {
     });
 
     try {
-        const response = await fetch(`{{ url_for('main.edit_template', template_id=template.id) }}`, {
+        const response = await fetch(window.location.href, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({items: items})
+            body: JSON.stringify({
+                items: items
+            })
         });
 
         if (response.ok) {
-            window.location.href = "{{ url_for('main.manage_templates') }}";
+            const result = await response.json();
+            if (result.status === 'success') {
+                window.location.href = "{{ url_for('main.manage_templates') }}";
+            } else {
+                alert('Error saving template: ' + (result.message || 'Unknown error'));
+            }
         } else {
             const data = await response.json();
             alert('Error saving template: ' + (data.message || 'Unknown error'));

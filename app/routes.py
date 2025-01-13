@@ -52,16 +52,10 @@ def logout():
 def client_checklist(client_id):
     client = Client.query.get_or_404(client_id)
     
-    # Get the default template
-    default_template = ChecklistTemplate.query.filter_by(is_default=True).first()
-    if not default_template:
-        flash("No default template found. Please create one first.")
-        return redirect(url_for("main.dashboard"))
-    
-    # Get all categories for this template
-    categories = ChecklistCategory.query.filter_by(template_id=default_template.id).all()
-    
+    # Get all items for this client
     items_by_category = {}
+    categories = ChecklistCategory.query.all()
+    
     for category in categories:
         # Get existing items for this client and category
         items = ChecklistItem.query.filter_by(
@@ -69,27 +63,42 @@ def client_checklist(client_id):
             category_id=category.id
         ).all()
         
-        # If no items exist, create them from template
-        if not items:
-            template_items = TemplateItem.query.filter_by(
-                template_id=default_template.id,
-                category_id=category.id
-            ).all()
+        if items:  # Only add categories that have items
+            items_by_category[category] = items
+
+    # If no items exist, create them from the client's template
+    if not items_by_category:
+        # Get the client's template from the most recent addition
+        template = ChecklistTemplate.query.get(request.args.get('template_id', type=int))
+        
+        if not template:
+            # Fallback to default template
+            template = ChecklistTemplate.query.filter_by(is_default=True).first()
+        
+        if template:
+            categories = ChecklistCategory.query.filter_by(template_id=template.id).all()
             
-            items = []
-            for template_item in template_items:
-                item = ChecklistItem(
-                    client_id=client_id,
-                    description=template_item.description,
-                    category_id=category.id,
-                    completed=False
-                )
-                db.session.add(item)
-                items.append(item)
+            for category in categories:
+                template_items = TemplateItem.query.filter_by(
+                    template_id=template.id,
+                    category_id=category.id
+                ).all()
+                
+                items = []
+                for template_item in template_items:
+                    item = ChecklistItem(
+                        client_id=client_id,
+                        description=template_item.description,
+                        category_id=category.id,
+                        completed=False
+                    )
+                    db.session.add(item)
+                    items.append(item)
+                
+                if items:  # Only add categories that have items
+                    items_by_category[category] = items
             
             db.session.commit()
-        
-        items_by_category[category] = items
 
     return render_template(
         "checklist.html",
@@ -348,6 +357,8 @@ def add_client():
 
     client_name = request.form.get("client_name")
     template_id = request.form.get("template_id")
+    
+    print(f"Debug - Template ID received: {template_id}")  # Debug log
 
     if client_name:
         if Client.query.filter_by(name=client_name).first():
@@ -357,26 +368,48 @@ def add_client():
             db.session.add(new_client)
             db.session.commit()
 
-            # Get the template
-            template = ChecklistTemplate.query.get(template_id) if template_id else ChecklistTemplate.query.filter_by(is_default=True).first()
+            selected_template = None
+            if template_id:
+                print(f"Debug - Looking for template with ID: {template_id}")  # Debug log
+                selected_template = ChecklistTemplate.query.get(int(template_id))
+                print(f"Debug - Found template: {selected_template.name if selected_template else 'None'}")  # Debug log
+            
+            if not selected_template:
+                print("Debug - Falling back to default template")  # Debug log
+                selected_template = ChecklistTemplate.query.filter_by(is_default=True).first()
 
-            if template:
-                # Create checklist items from template items
-                template_items = TemplateItem.query.filter_by(template_id=template.id).all()
-                for template_item in template_items:
-                    checklist_item = ChecklistItem(
-                        client_id=new_client.id,
-                        description=template_item.description,
-                        category_id=template_item.category_id,
-                        completed=False
-                    )
-                    db.session.add(checklist_item)
+            if selected_template:
+                print(f"Debug - Using template: {selected_template.name}")  # Debug log
+                categories = ChecklistCategory.query.filter_by(template_id=selected_template.id).all()
+                print(f"Debug - Found categories: {[c.name for c in categories]}")  # Debug log
+                
+                for category in categories:
+                    template_items = TemplateItem.query.filter_by(
+                        template_id=selected_template.id,
+                        category_id=category.id
+                    ).all()
+                    print(f"Debug - Found items for category {category.name}: {[i.description for i in template_items]}")  # Debug log
 
-            db.session.commit()
-            flash("Client added successfully.")
+                    for template_item in template_items:
+                        checklist_item = ChecklistItem(
+                            client_id=new_client.id,
+                            description=template_item.description,
+                            category_id=category.id,
+                            completed=False
+                        )
+                        db.session.add(checklist_item)
+                
+                try:
+                    db.session.commit()
+                    flash(f"Client added successfully with {selected_template.name} template.")
+                except Exception as e:
+                    db.session.rollback()
+                    print(f"Debug - Error: {str(e)}")  # Debug log
+                    flash(f"Error applying template: {str(e)}")
+            else:
+                flash("Client added but no template was applied.")
 
     return redirect(url_for("main.manage_clients"))
-
 
 @main.route("/delete-template/<int:template_id>", methods=["POST"])
 @login_required
@@ -545,44 +578,51 @@ def edit_template(template_id):
         return redirect(url_for("main.dashboard"))
 
     template = ChecklistTemplate.query.get_or_404(template_id)
-    categories = ChecklistCategory.query.filter_by(template_id=template_id).all()
-
+    
     if request.method == "POST":
         try:
             data = request.get_json()
-            if not data or 'items' not in data:
-                return jsonify({"status": "error", "message": "No items data provided"}), 400
+            if not data:
+                return jsonify({"status": "error", "message": "No data provided"}), 400
 
-            # Begin transaction
             # Delete existing template items
             TemplateItem.query.filter_by(template_id=template_id).delete()
-
+            
             # Add new items
-            for item_data in data['items']:
-                if 'description' not in item_data or 'category_id' not in item_data:
-                    continue
-                    
-                new_item = TemplateItem(
-                    description=item_data['description'],
-                    category_id=item_data['category_id'],
-                    template_id=template_id
-                )
-                db.session.add(new_item)
+            if 'items' in data:
+                for item_data in data['items']:
+                    if 'description' in item_data and 'category_id' in item_data:
+                        new_item = TemplateItem(
+                            description=item_data['description'],
+                            category_id=item_data['category_id'],
+                            template_id=template_id
+                        )
+                        db.session.add(new_item)
 
             db.session.commit()
             return jsonify({"status": "success"})
 
         except Exception as e:
             db.session.rollback()
-            print(f"Error saving template: {str(e)}")  # For debugging
+            print(f"Error saving template: {str(e)}")  # Debug logging
             return jsonify({"status": "error", "message": str(e)}), 500
 
-    # GET request - render the template edit form
-    template_items = TemplateItem.query.filter_by(template_id=template_id).all()
+    # GET request handling
+    categories = ChecklistCategory.query.filter_by(template_id=template_id).all()
+    items_by_category = {}
+    
+    for category in categories:
+        items = TemplateItem.query.filter_by(
+            template_id=template_id,
+            category_id=category.id
+        ).all()
+        items_by_category[category] = items
+
     return render_template(
-        "edit_template.html", 
-        template=template, 
-        categories=categories
+        "edit_template.html",
+        template=template,
+        categories=categories,
+        items_by_category=items_by_category
     )
 
 @main.route("/edit-client-checklist/<int:client_id>", methods=["GET", "POST"])
