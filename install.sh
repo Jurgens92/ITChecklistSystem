@@ -88,6 +88,8 @@ autostart=true
 autorestart=true
 stderr_logfile=/var/log/itchecklist/itchecklist.err.log
 stdout_logfile=/var/log/itchecklist/itchecklist.out.log
+startsecs=10
+stopwaitsecs=60
 EOL
 
 # Create log directory
@@ -116,16 +118,36 @@ ln -sf /etc/nginx/sites-available/itchecklist /etc/nginx/sites-enabled/
 rm -f /etc/nginx/sites-enabled/default  # Remove default site
 nginx -t
 
-# Create update script
+# Create update script with service checks
 print_message "Creating update script..."
 cat > /var/www/itchecklist/update.sh << EOL
 #!/bin/bash
+
+# Check if services are running
+if ! systemctl is-active --quiet nginx; then
+    systemctl start nginx
+fi
+
+if ! systemctl is-active --quiet supervisor; then
+    systemctl start supervisor
+fi
+
 cd /var/www/itchecklist
 git pull origin main
 source venv/bin/activate
 pip install -r requirements.txt
+
+# Restart application
 sudo supervisorctl restart itchecklist
-sudo systemctl restart nginx
+
+# Ensure nginx is configured correctly and restart
+sudo nginx -t && sudo systemctl restart nginx
+
+# Verify services are running
+if ! supervisorctl status itchecklist | grep -q RUNNING; then
+    echo "Warning: Application failed to start. Checking logs..."
+    tail -n 50 /var/log/itchecklist/itchecklist.err.log
+fi
 EOL
 
 # Make update script executable
@@ -141,12 +163,40 @@ cd /var/www/itchecklist
 source venv/bin/activate
 python3 resetdb.py
 
+# Enable services to start on boot
+print_message "Enabling services to start on boot..."
+systemctl enable nginx
+systemctl enable supervisor
+
+# Ensure supervisor is running and will start on boot
+systemctl start supervisor
+supervisorctl reread
+supervisorctl update
+
 # Start services
 print_message "Starting services..."
 systemctl restart nginx
 supervisorctl reread
 supervisorctl update
 supervisorctl start itchecklist
+
+# Verify services are running correctly
+print_message "Verifying services..."
+if ! systemctl is-active --quiet nginx; then
+    print_error "Nginx is not running!"
+    exit 1
+fi
+
+if ! systemctl is-active --quiet supervisor; then
+    print_error "Supervisor is not running!"
+    exit 1
+fi
+
+if ! supervisorctl status itchecklist | grep -q RUNNING; then
+    print_error "Application failed to start! Checking logs..."
+    tail -n 50 /var/log/itchecklist/itchecklist.err.log
+    exit 1
+fi
 
 print_message "Installation complete!"
 print_message "You can now access the application at: http://your-server-ip"
