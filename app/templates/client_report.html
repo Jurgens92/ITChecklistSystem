@@ -22,7 +22,12 @@
                 <tr>
                     <td>{{ record.date_performed.strftime('%Y-%m-%d %H:%M') }}</td>
                     <td>{{ record.user.username }}</td>
-                    <td>{{ record.completed_count }}</td>
+                    <td>
+                        <a href="{{ url_for('main.checklist_detail', record_id=record.id) }}" 
+                           class="items-completed-link">
+                            {{ record.completed_count }}
+                        </a>
+                    </td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -47,6 +52,16 @@
     .export-btn:hover {
         background-color: #218838;
     }
-    </style>
+
+    .items-completed-link {
+    color: #007bff;
+    text-decoration: none;
+    cursor: pointer;
+    }
+
+    .items-completed-link:hover {
+    text-decoration: underline;
+    }
+</style>
 
 {% endblock %}
