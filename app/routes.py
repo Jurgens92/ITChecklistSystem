@@ -816,3 +816,30 @@ def checklist_detail(record_id):
         record=record,
         items_by_category=items_by_category
     )
+
+@main.route("/change-password", methods=["GET", "POST"])
+@login_required
+def change_password():
+    if request.method == "POST":
+        current_password = request.form.get("current_password")
+        new_password = request.form.get("new_password")
+        confirm_password = request.form.get("confirm_password")
+        
+        if not current_user.check_password(current_password):
+            flash("Current password is incorrect")
+            return redirect(url_for("main.change_password"))
+            
+        if new_password != confirm_password:
+            flash("New passwords do not match")
+            return redirect(url_for("main.change_password"))
+            
+        if len(new_password) < 6:
+            flash("New password must be at least 6 characters long")
+            return redirect(url_for("main.change_password"))
+            
+        current_user.set_password(new_password)
+        db.session.commit()
+        flash("Password changed successfully")
+        return redirect(url_for("main.dashboard"))
+        
+    return render_template("change_password.html")
