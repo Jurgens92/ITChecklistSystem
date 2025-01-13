@@ -47,6 +47,8 @@ cd /var/www/itchecklist
 print_message "Cloning repository..."
 if [ -d "/var/www/itchecklist/.git" ]; then
     print_warning "Git repository already exists. Pulling latest changes..."
+    # Add the directory to git safe.directory
+    git config --global --add safe.directory /var/www/itchecklist
     git pull origin main
 else
     git clone https://github.com/Jurgens92/ITChecklistSystem.git .
