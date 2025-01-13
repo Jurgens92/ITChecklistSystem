@@ -43,15 +43,49 @@ print_message "Creating application directory..."
 mkdir -p /var/www/itchecklist
 cd /var/www/itchecklist
 
-# Clone repository
-print_message "Cloning repository..."
-if [ -d "/var/www/itchecklist/.git" ]; then
-    print_warning "Git repository already exists. Pulling latest changes..."
-    # Add the directory to git safe.directory
+# Handle repository setup
+print_message "Setting up repository..."
+if [ -d ".git" ]; then
+    # Save git config
+    mv .git /tmp/itchecklist_git
+    # Clean directory
+    rm -rf *
+    # Restore git config
+    mv /tmp/itchecklist_git .git
+    # Configure git safety
     git config --global --add safe.directory /var/www/itchecklist
-    git pull origin main
+    # Force clean checkout
+    git fetch origin
+    git reset --hard origin/main
 else
+    rm -rf *
     git clone https://github.com/Jurgens92/ITChecklistSystem.git .
+fi
+
+# Verify and create essential files if missing
+if [ ! -f "config.py" ]; then
+    print_message "Creating config.py..."
+    cat > config.py << EOL
+class Config:
+    SECRET_KEY = 'dev'
+    SQLALCHEMY_DATABASE_URI = 'sqlite:///checklist.db'
+    SQLALCHEMY_TRACK_MODIFICATIONS = False
+EOL
+fi
+
+# Check for requirements.txt
+if [ ! -f "requirements.txt" ]; then
+    print_message "Creating requirements.txt..."
+    cat > requirements.txt << EOL
+Flask==3.0.0
+Flask-SQLAlchemy==3.1.1
+Flask-Login==0.6.3
+Werkzeug==3.0.1
+SQLAlchemy==2.0.23
+python-dotenv==1.0.0
+Bootstrap-Flask==2.3.3
+reportlab==4.0.4
+EOL
 fi
 
 # Create instance directory for SQLite database
@@ -73,7 +107,7 @@ source venv/bin/activate
 # Install Python packages
 print_message "Installing Python requirements..."
 pip install --upgrade pip
-pip install --only-binary=:all: -r requirements.txt
+pip install --only-binary=:all: -r requirements.txt || pip install -r requirements.txt
 pip install gunicorn
 
 # Create Gunicorn configuration
@@ -98,6 +132,7 @@ stderr_logfile=/var/log/itchecklist/itchecklist.err.log
 stdout_logfile=/var/log/itchecklist/itchecklist.out.log
 startsecs=10
 stopwaitsecs=60
+environment=PATH="/var/www/itchecklist/venv/bin"
 EOL
 
 # Create log directory
@@ -179,8 +214,7 @@ usermod -a -G www-data $SUDO_USER
 # Initialize database
 print_message "Initializing database..."
 cd /var/www/itchecklist
-source venv/bin/activate
-sudo -u www-data python3 resetdb.py
+sudo -u www-data bash -c "source /var/www/itchecklist/venv/bin/activate && python3 resetdb.py"
 
 # Enable services to start on boot
 print_message "Enabling services to start on boot..."
@@ -211,7 +245,12 @@ if ! systemctl is-active --quiet supervisor; then
     exit 1
 fi
 
-if ! supervisorctl status itchecklist | grep -q RUNNING; then
+# Modified check for application status
+print_message "Checking application status..."
+SUPERVISOR_STATUS=$(supervisorctl status itchecklist)
+if echo "$SUPERVISOR_STATUS" | grep -q "RUNNING"; then
+    print_message "Application is running properly!"
+else
     print_error "Application failed to start! Checking logs..."
     tail -n 50 /var/log/itchecklist/itchecklist.err.log
     exit 1
