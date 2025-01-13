@@ -36,7 +36,7 @@ apt update && apt upgrade -y
 
 # Install required system packages
 print_message "Installing required packages..."
-apt install -y python3 python3-pip python3-venv nginx supervisor git
+apt install -y python3 python3-pip python3-venv nginx supervisor git python3-dev libfreetype6-dev
 
 # Create application directory
 print_message "Creating application directory..."
@@ -52,6 +52,12 @@ else
     git clone https://github.com/Jurgens92/ITChecklistSystem.git .
 fi
 
+# Create instance directory for SQLite database
+print_message "Creating instance directory..."
+mkdir -p /var/www/itchecklist/instance
+chown -R www-data:www-data /var/www/itchecklist/instance
+chmod 775 /var/www/itchecklist/instance
+
 # Generate and set random secret key
 print_message "Generating random secret key..."
 RANDOM_KEY=$(python3 -c 'import secrets; print(secrets.token_hex(16))')
@@ -65,7 +71,7 @@ source venv/bin/activate
 # Install Python packages
 print_message "Installing Python requirements..."
 pip install --upgrade pip
-pip install -r requirements.txt
+pip install --only-binary=:all: -r requirements.txt
 pip install gunicorn
 
 # Create Gunicorn configuration
@@ -137,6 +143,11 @@ git pull origin main
 source venv/bin/activate
 pip install -r requirements.txt
 
+# Set proper permissions
+chown -R www-data:www-data /var/www/itchecklist/instance
+chmod 775 /var/www/itchecklist/instance
+[ -f /var/www/itchecklist/instance/checklist.db ] && chmod 664 /var/www/itchecklist/instance/checklist.db
+
 # Restart application
 sudo supervisorctl restart itchecklist
 
@@ -156,12 +167,18 @@ chmod +x /var/www/itchecklist/update.sh
 # Set correct permissions
 print_message "Setting permissions..."
 chown -R www-data:www-data /var/www/itchecklist
+chmod 775 /var/www/itchecklist
+[ -f /var/www/itchecklist/instance/checklist.db ] && chmod 664 /var/www/itchecklist/instance/checklist.db
+
+# Add current user to www-data group
+print_message "Adding current user to www-data group..."
+usermod -a -G www-data $SUDO_USER
 
 # Initialize database
 print_message "Initializing database..."
 cd /var/www/itchecklist
 source venv/bin/activate
-python3 resetdb.py
+sudo -u www-data python3 resetdb.py
 
 # Enable services to start on boot
 print_message "Enabling services to start on boot..."
@@ -198,6 +215,12 @@ if ! supervisorctl status itchecklist | grep -q RUNNING; then
     exit 1
 fi
 
+# Fix permissions one final time
+print_message "Final permission check..."
+chown -R www-data:www-data /var/www/itchecklist/instance
+chmod 775 /var/www/itchecklist/instance
+[ -f /var/www/itchecklist/instance/checklist.db ] && chmod 664 /var/www/itchecklist/instance/checklist.db
+
 print_message "Installation complete!"
 print_message "You can now access the application at: http://your-server-ip"
 print_warning "Default login credentials:"
@@ -210,5 +233,8 @@ print_warning "A random SECRET_KEY has been generated for security"
 echo ""
 print_message "To update the application in the future, run:"
 echo "sudo /var/www/itchecklist/update.sh"
+
+# Notify about group changes
+print_warning "NOTE: You may need to log out and back in for group changes to take effect"
 
 exit 0
