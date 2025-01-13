@@ -41,39 +41,37 @@ A web-based IT checklist management system designed for IT companies to efficien
 ### Automated Installation (Recommended)
 
 1. Clone the repository:
+    ```bash
+    git clone https://github.com/Jurgens92/ITChecklistSystem.git
+    ```
+
+2. Run the installation script:
+    ```bash
+    cd ITChecklistSystem
+    chmod +x install.sh
+    sudo ./install.sh
+    ```
+
+3. Access the application at:
+    ```
+    http://your-server-ip
+    ```
+
+## Default Credentials
+
+- Username: `admin`
+- Password: `admin`
+
+**Important**: Change these credentials after first login.
+
+## Configuration
+
+All configuration settings can be found in `config.py`. Key settings include:
+- `SECRET_KEY`: Application security key
+- `SQLALCHEMY_DATABASE_URI`: Database connection string
+
+## Updating
+
+To update the application:
 ```bash
-git clone https://github.com/Jurgens92/ITChecklistSystem.git
-
-## Run the installation script
-
-cd ITChecklistSystem
-chmod +x install.sh
-sudo ./install.sh
-
-### Access the application at
-http://your-server-ip
-
-# Default Credentials
-
-Username: admin
-Password: admin
-
-Important: Change these credentials after first login.
-Configuration
-All configuration settings can be found in config.py. Key settings include:
-
-SECRET_KEY: Application security key
-SQLALCHEMY_DATABASE_URI: Database connection string
-
-# Updating
-
 sudo /var/www/itchecklist/update.sh
-
-# Contributing
-
-Fork the repository
-Create your feature branch (git checkout -b feature/AmazingFeature)
-Commit your changes (git commit -m 'Add some AmazingFeature')
-Push to the branch (git push origin feature/AmazingFeature)
-Open a Pull Request
-
