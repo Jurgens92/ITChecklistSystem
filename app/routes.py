@@ -52,6 +52,9 @@ def logout():
 def client_checklist(client_id):
     client = Client.query.get_or_404(client_id)
     
+    # Get all available templates for the dropdown
+    templates = ChecklistTemplate.query.all()  # Add this line
+    
     # Get all items for this client
     items_by_category = {}
     categories = ChecklistCategory.query.all()
@@ -103,7 +106,8 @@ def client_checklist(client_id):
     return render_template(
         "checklist.html",
         client=client,
-        items_by_category=items_by_category
+        items_by_category=items_by_category,
+        templates=templates
     )
 
 @main.route("/submit_checklist", methods=["POST"])
@@ -651,6 +655,61 @@ def edit_client_checklist(client_id):
 
     return render_template("edit_client_checklist.html", client=client)
 
+@main.route("/add-template-to-client/<int:client_id>", methods=["POST"])
+@login_required
+def add_template_to_client(client_id):
+    if not current_user.is_admin:
+        flash("Access denied")
+        return redirect(url_for("main.dashboard"))
+    
+    client = Client.query.get_or_404(client_id)
+    template_id = request.form.get('template_id')
+    
+    if template_id:
+        template = ChecklistTemplate.query.get(template_id)
+        if template:
+            categories = ChecklistCategory.query.filter_by(template_id=template.id).all()
+            duplicates_prevented = 0
+            items_added = 0
+            
+            for category in categories:
+                template_items = TemplateItem.query.filter_by(
+                    template_id=template.id,
+                    category_id=category.id
+                ).all()
+                
+                for template_item in template_items:
+                    # Check if this item already exists for this client and category
+                    existing_item = ChecklistItem.query.filter_by(
+                        client_id=client_id,
+                        category_id=category.id,
+                        description=template_item.description
+                    ).first()
+                    
+                    if not existing_item:
+                        checklist_item = ChecklistItem(
+                            client_id=client_id,
+                            description=template_item.description,
+                            category_id=category.id,
+                            completed=False
+                        )
+                        db.session.add(checklist_item)
+                        items_added += 1
+                    else:
+                        duplicates_prevented += 1
+            
+            try:
+                db.session.commit()
+                if duplicates_prevented > 0:
+                    flash(f"Added {items_added} new items from {template.name} template. "
+                          f"Skipped {duplicates_prevented} duplicate items.")
+                else:
+                    flash(f"Successfully added {items_added} items from {template.name} template.")
+            except Exception as e:
+                db.session.rollback()
+                flash(f"Error adding template: {str(e)}")
+    
+    return redirect(url_for("main.client_checklist", client_id=client_id))
 
 @main.route("/delete-client/<int:client_id>", methods=["POST"])
 @login_required
@@ -673,4 +732,58 @@ def delete_client(client_id):
 
     return redirect(url_for("main.manage_clients"))
 
-
+@main.route("/edit-client-structure/<int:client_id>", methods=["GET", "POST"])
+@login_required
+def edit_client_structure(client_id):
+    if not current_user.is_admin:
+        flash("Access denied")
+        return redirect(url_for("main.dashboard"))
+        
+    client = Client.query.get_or_404(client_id)
+    
+    if request.method == "POST":
+        try:
+            data = request.get_json()
+            
+            # Clear existing items for this client
+            ChecklistItem.query.filter_by(client_id=client_id).delete()
+            
+            # Add new/updated items
+            for category_data in data['categories']:
+                category_id = category_data['id']
+                items = category_data['items']
+                
+                for item in items:
+                    new_item = ChecklistItem(
+                        client_id=client_id,
+                        description=item['description'],
+                        category_id=category_id,
+                        completed=False
+                    )
+                    db.session.add(new_item)
+            
+            db.session.commit()
+            return jsonify({"status": "success"})
+            
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({"status": "error", "message": str(e)}), 500
+    
+    # GET request - display edit form
+    items_by_category = {}
+    categories = ChecklistCategory.query.all()
+    
+    for category in categories:
+        items = ChecklistItem.query.filter_by(
+            client_id=client_id,
+            category_id=category.id
+        ).all()
+        if items:
+            items_by_category[category] = items
+    
+    return render_template(
+        "edit_client_structure.html",
+        client=client,
+        categories=categories,
+        items_by_category=items_by_category
+    )

@@ -244,3 +244,23 @@ nav a:hover {
 .button:hover {
     opacity: 0.9;
 }
+
+.template-actions {
+    margin: 20px 0;
+    padding: 20px;
+    background-color: #f8f9fa;
+    border-radius: 5px;
+}
+
+.add-template-form {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.add-template-form select {
+    flex: 1;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
