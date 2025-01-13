@@ -16,7 +16,7 @@
         <div class="checklist-section" data-category-id="{{ category.id }}">
             <div class="category-header">
                 <h2>{{ category.name }}</h2>
-                <button type="button" class="delete-category" onclick="deleteCategory(' + category.id + ')">Delete Category</button>
+                <button type="button" class="delete-category" onclick="deleteCategory({{ category.id }})">Delete Category</button>
             </div>
             <div class="items-list" id="items-{{ category.id }}">
                 {% for item in template.items if item.category_id == category.id %}
@@ -29,7 +29,7 @@
                 </div>
                 {% endfor %}
             </div>
-            <button type="button" onclick="addItem(' + category.id + ')"class="button add-item">Add Item</button>
+            <button type="button" onclick="addItem({{ category.id }})" class="button add-item">Add Item</button>
         </div>
         {% endfor %}
 
