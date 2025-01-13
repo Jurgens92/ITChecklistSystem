@@ -55,20 +55,32 @@
                     </td>
                     <td>
                         {% if user.id != current_user.id %}
-                            <div class="action-buttons">
-                                <button onclick="showResetPassword('{{ user.username }}', {{ user.id }})" 
-                                        class="button reset-btn">
-                                    Reset Password
+                        <div class="action-buttons">
+                            <button onclick="showResetPassword('{{ user.username }}', {{ user.id }})" 
+                                    class="button reset-btn">
+                                Reset Password
+                            </button>
+                            <form method="POST" action="{{ url_for('main.toggle_admin', user_id=user.id) }}" 
+                                  style="display: inline;">
+                                <button type="submit" 
+                                        class="button {% if user.is_admin %}remove-admin-btn{% else %}make-admin-btn{% endif %}"
+                                        onclick="return confirm('Are you sure you want to {% if user.is_admin %}remove{% else %}grant{% endif %} admin privileges for {{ user.username }}?')">
+                                    {% if user.is_admin %}
+                                        Remove Admin
+                                    {% else %}
+                                        Make Admin
+                                    {% endif %}
                                 </button>
-                                <a href="{{ url_for('main.delete_user', user_id=user.id) }}" 
-                                   class="button delete-btn"
-                                   onclick="return confirm('Are you sure you want to delete this user?')">
-                                    Delete
-                                </a>
-                            </div>
-                        {% else %}
-                            <span class="current-user-badge">Current User</span>
-                        {% endif %}
+                            </form>
+                            <a href="{{ url_for('main.delete_user', user_id=user.id) }}" 
+                               class="button delete-btn"
+                               onclick="return confirm('Are you sure you want to delete this user?')">
+                                Delete
+                            </a>
+                        </div>
+                    {% else %}
+                        <span class="current-user-badge">Current User</span>
+                    {% endif %}
                     </td>
                 </tr>
                 {% endfor %}
@@ -115,6 +127,23 @@ window.onclick = function(event) {
     }
 }
 </script>
+
+<!-- Add modal for reset password -->
+<div id="resetPasswordModal" class="modal">
+    <div class="modal-content">
+        <h3>Reset Password for <span id="resetUsername"></span></h3>
+        <form id="resetPasswordForm" method="POST">
+            <div class="form-group">
+                <label for="new_password">New Password:</label>
+                <input type="password" id="new_password" name="new_password" required>
+            </div>
+            <div class="form-actions">
+                <button type="submit" class="button">Reset Password</button>
+                <button type="button" class="button secondary" onclick="closeModal()">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
 
 <style>
 .manage-users-container {
@@ -261,39 +290,24 @@ window.onclick = function(event) {
     justify-content: flex-end;
     margin-top: 20px;
 }
+
+.make-admin-btn {
+    background-color: #28a745;
+}
+
+.make-admin-btn:hover {
+    background-color: #218838;
+}
+
+.remove-admin-btn {
+    background-color: #ffc107;
+    color: #000;
+}
+
+.remove-admin-btn:hover {
+    background-color: #e0a800;
+}
 </style>
 
-<!-- Add modal for reset password -->
-<div id="resetPasswordModal" class="modal">
-    <div class="modal-content">
-        <h3>Reset Password for <span id="resetUsername"></span></h3>
-        <form id="resetPasswordForm" method="POST">
-            <div class="form-group">
-                <label for="new_password">New Password:</label>
-                <input type="password" id="new_password" name="new_password" required>
-            </div>
-            <div class="form-actions">
-                <button type="submit" class="button">Reset Password</button>
-                <button type="button" class="button secondary" onclick="closeModal()">Cancel</button>
-            </div>
-        </form>
-    </div>
-</div>
-{% endblock %}
 
-@main.route('/reset-password/<int:user_id>', methods=['POST'])
-@login_required
-def reset_password(user_id):
-    if not current_user.is_admin:
-        flash('Access denied')
-        return redirect(url_for('main.dashboard'))
-    
-    user = User.query.get_or_404(user_id)
-    new_password = request.form.get('new_password')
-    
-    if new_password:
-        user.set_password(new_password)
-        db.session.commit()
-        flash(f'Password reset for user {user.username}')
-    
-    return redirect(url_for('main.manage_users'))
+{% endblock %}
