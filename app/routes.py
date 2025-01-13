@@ -41,6 +41,24 @@ def login():
         flash("Invalid username or password")
     return render_template("login.html")
 
+@main.route("/toggle-admin/<int:user_id>", methods=["POST"])
+@login_required
+def toggle_admin(user_id):
+    if not current_user.is_admin:
+        flash("Access denied")
+        return redirect(url_for("main.dashboard"))
+
+    if current_user.id == user_id:
+        flash("Cannot change your own admin status")
+        return redirect(url_for("main.manage_users"))
+
+    user = User.query.get_or_404(user_id)
+    user.is_admin = not user.is_admin
+    db.session.commit()
+    
+    new_role = "admin" if user.is_admin else "standard user"
+    flash(f"Changed {user.username}'s role to {new_role}")
+    return redirect(url_for("main.manage_users"))
 
 @main.route("/logout")
 def logout():
