@@ -1,0 +1,205 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="edit-structure-container">
+    <h1>Edit Checklist Structure - {{ client.name }}</h1>
+
+    <div class="categories-section">
+        <h2>Categories and Items</h2>
+        <div id="categories-container">
+            {% for category in categories %}
+            <div class="category-section" data-category-id="{{ category.id }}">
+                <div class="category-header">
+                    <h3>{{ category.name }}</h3>
+                    <button type="button" class="remove-category-btn" onclick="removeCategory(this)">Remove Category</button>
+                </div>
+                <div class="items-list">
+                    {% for item in items_by_category.get(category, []) %}
+                    <div class="checklist-item">
+                        <input type="text" value="{{ item.description }}" class="item-input">
+                        <button type="button" class="remove-item-btn" onclick="removeItem(this)">×</button>
+                    </div>
+                    {% endfor %}
+                </div>
+                <button type="button" class="add-item-btn" onclick="addItem({{ category.id }})">Add Item</button>
+            </div>
+            {% endfor %}
+        </div>
+        
+        <div class="add-category-section">
+            <h3>Add New Category</h3>
+            <select id="categorySelect">
+                {% for category in categories %}
+                <option value="{{ category.id }}">{{ category.name }}</option>
+                {% endfor %}
+            </select>
+            <button onclick="addCategory()" class="button">Add Category</button>
+        </div>
+    </div>
+
+    <div class="form-actions">
+        <button onclick="saveChanges()" class="button save-btn">Save Changes</button>
+        <a href="{{ url_for('main.client_checklist', client_id=client.id) }}" class="button secondary">Cancel</a>
+    </div>
+</div>
+
+<style>
+.edit-structure-container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+.category-section {
+    background: white;
+    padding: 20px;
+    margin: 20px 0;
+    border-radius: 5px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+
+.category-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.checklist-item {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.item-input {
+    flex: 1;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
+.remove-item-btn {
+    background: #dc3545;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 0 10px;
+    cursor: pointer;
+}
+
+.add-item-btn {
+    background: #28a745;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 8px 16px;
+    cursor: pointer;
+    margin-top: 10px;
+}
+
+.form-actions {
+    margin-top: 20px;
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+}
+
+.save-btn {
+    background: #007bff;
+}
+</style>
+
+<script>
+function addItem(categoryId) {
+    const categorySection = document.querySelector(`.category-section[data-category-id="${categoryId}"]`);
+    const itemsList = categorySection.querySelector('.items-list');
+    
+    const newItem = document.createElement('div');
+    newItem.className = 'checklist-item';
+    newItem.innerHTML = `
+        <input type="text" class="item-input" placeholder="Enter item description">
+        <button type="button" class="remove-item-btn" onclick="removeItem(this)">×</button>
+    `;
+    
+    itemsList.appendChild(newItem);
+}
+
+function removeItem(button) {
+    button.closest('.checklist-item').remove();
+}
+
+function addCategory() {
+    const select = document.getElementById('categorySelect');
+    const categoryId = select.value;
+    const categoryName = select.options[select.selectedIndex].text;
+    
+    const categoriesContainer = document.getElementById('categories-container');
+    
+    // Check if category already exists
+    if (document.querySelector(`.category-section[data-category-id="${categoryId}"]`)) {
+        alert('This category is already added');
+        return;
+    }
+    
+    const newCategory = document.createElement('div');
+    newCategory.className = 'category-section';
+    newCategory.dataset.categoryId = categoryId;
+    newCategory.innerHTML = `
+        <div class="category-header">
+            <h3>${categoryName}</h3>
+            <button type="button" class="remove-category-btn" onclick="removeCategory(this)">Remove Category</button>
+        </div>
+        <div class="items-list"></div>
+        <button type="button" class="add-item-btn" onclick="addItem(${categoryId})">Add Item</button>
+    `;
+    
+    categoriesContainer.appendChild(newCategory);
+}
+
+function removeCategory(button) {
+    button.closest('.category-section').remove();
+}
+
+function saveChanges() {
+    const categories = [];
+    document.querySelectorAll('.category-section').forEach(categorySection => {
+        const categoryId = categorySection.dataset.categoryId;
+        const items = [];
+        
+        categorySection.querySelectorAll('.checklist-item input').forEach(input => {
+            if (input.value.trim()) {
+                items.push({
+                    description: input.value.trim()
+                });
+            }
+        });
+        
+        categories.push({
+            id: parseInt(categoryId),
+            items: items
+        });
+    });
+    
+    fetch("{{ url_for('main.edit_client_structure', client_id=client.id) }}", {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            categories: categories
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            window.location.href = "{{ url_for('main.client_checklist', client_id=client.id) }}";
+        } else {
+            alert('Error saving changes: ' + (data.message || 'Unknown error'));
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error saving changes. Please try again.');
+    });
+}
+</script>
+{% endblock %}
