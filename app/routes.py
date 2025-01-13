@@ -146,7 +146,7 @@ def submit_checklist():
         user_id=current_user.id
     )
     db.session.add(record)
-    db.session.commit()
+    db.session.flush()  # Get the record ID
     
     # Add notes if provided
     if notes_text and notes_text.strip():
@@ -157,18 +157,26 @@ def submit_checklist():
         )
         db.session.add(notes)
     
-    # Create completed items entries
+    # Get all items for this client
     client_items = ChecklistItem.query.filter_by(client_id=client_id).all()
+    
+    # Create CompletedItem entries
     for item in client_items:
+        completed = str(item.id) in completed_item_ids
         completed_item = CompletedItem(
             record_id=record.id,
             checklist_item_id=item.id,
-            completed=str(item.id) in completed_item_ids
+            completed=completed
         )
         db.session.add(completed_item)
     
-    db.session.commit()
-    flash("Checklist submitted successfully")
+    try:
+        db.session.commit()
+        flash("Checklist submitted successfully")
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Error submitting checklist: {str(e)}")
+        
     return redirect(url_for("main.dashboard"))
 
 @main.route("/reports")
@@ -193,13 +201,17 @@ def client_report(client_id):
         return redirect(url_for("main.dashboard"))
 
     client = Client.query.get_or_404(client_id)
-    records = (
-        ChecklistRecord.query.filter_by(client_id=client_id)
-        .order_by(ChecklistRecord.date_performed.desc())
+    
+    # Get records with completed counts
+    records = ChecklistRecord.query.filter_by(client_id=client_id)\
+        .order_by(ChecklistRecord.date_performed.desc())\
         .all()
+    
+    return render_template(
+        "client_report.html", 
+        client=client, 
+        records=records
     )
-
-    return render_template("client_report.html", client=client, records=records)
 
 
 @main.route("/reports/user/<int:user_id>")
@@ -407,57 +419,52 @@ def add_client():
     client_name = request.form.get("client_name")
     template_id = request.form.get("template_id")
     
-    print(f"Debug - Template ID received: {template_id}")  # Debug log
-
     if client_name:
+        # Check for existing client
         if Client.query.filter_by(name=client_name).first():
             flash("A client with this name already exists.")
-        else:
+            return redirect(url_for("main.manage_clients"))
+            
+        try:
+            # Create new client
             new_client = Client(name=client_name, is_active=True)
             db.session.add(new_client)
-            db.session.commit()
-
-            selected_template = None
-            if template_id:
-                print(f"Debug - Looking for template with ID: {template_id}")  # Debug log
-                selected_template = ChecklistTemplate.query.get(int(template_id))
-                print(f"Debug - Found template: {selected_template.name if selected_template else 'None'}")  # Debug log
+            db.session.flush()  # Get the client ID
             
-            if not selected_template:
-                print("Debug - Falling back to default template")  # Debug log
-                selected_template = ChecklistTemplate.query.filter_by(is_default=True).first()
-
-            if selected_template:
-                print(f"Debug - Using template: {selected_template.name}")  # Debug log
-                categories = ChecklistCategory.query.filter_by(template_id=selected_template.id).all()
-                print(f"Debug - Found categories: {[c.name for c in categories]}")  # Debug log
-                
-                for category in categories:
-                    template_items = TemplateItem.query.filter_by(
-                        template_id=selected_template.id,
-                        category_id=category.id
-                    ).all()
-                    print(f"Debug - Found items for category {category.name}: {[i.description for i in template_items]}")  # Debug log
-
-                    for template_item in template_items:
-                        checklist_item = ChecklistItem(
-                            client_id=new_client.id,
-                            description=template_item.description,
-                            category_id=category.id,
-                            completed=False
-                        )
-                        db.session.add(checklist_item)
-                
-                try:
-                    db.session.commit()
-                    flash(f"Client added successfully with {selected_template.name} template.")
-                except Exception as e:
-                    db.session.rollback()
-                    print(f"Debug - Error: {str(e)}")  # Debug log
-                    flash(f"Error applying template: {str(e)}")
+            # Apply template
+            if template_id:
+                template = ChecklistTemplate.query.get(int(template_id))
             else:
-                flash("Client added but no template was applied.")
-
+                template = ChecklistTemplate.query.filter_by(is_default=True).first()
+            
+            if template:
+                # Get all template items with categories
+                template_items = db.session.query(
+                    TemplateItem, ChecklistCategory
+                ).join(
+                    ChecklistCategory, 
+                    TemplateItem.category_id == ChecklistCategory.id
+                ).filter(
+                    TemplateItem.template_id == template.id
+                ).all()
+                
+                # Create checklist items
+                for template_item, category in template_items:
+                    item = ChecklistItem(
+                        client_id=new_client.id,
+                        description=template_item.description,
+                        category_id=category.id,
+                        completed=False
+                    )
+                    db.session.add(item)
+                
+            db.session.commit()
+            flash(f"Client added successfully with template {template.name if template else 'None'}")
+            
+        except Exception as e:
+            db.session.rollback()
+            flash(f"Error creating client: {str(e)}")
+            
     return redirect(url_for("main.manage_clients"))
 
 @main.route("/delete-template/<int:template_id>", methods=["POST"])
@@ -838,26 +845,30 @@ def edit_client_structure(client_id):
 def checklist_detail(record_id):
     record = ChecklistRecord.query.get_or_404(record_id)
     
-    # Get all completed items for this record
-    completed_items = CompletedItem.query.filter_by(record_id=record.id).all()
-    
-    # Get the notes for this record
-    notes = ChecklistNotes.query.filter_by(checklist_record_id=record.id).first()
+    # Get all completed items for this record with their details
+    completed_items = db.session.query(
+        CompletedItem, ChecklistItem, ChecklistCategory
+    ).join(
+        ChecklistItem, CompletedItem.checklist_item_id == ChecklistItem.id
+    ).join(
+        ChecklistCategory, ChecklistItem.category_id == ChecklistCategory.id
+    ).filter(
+        CompletedItem.record_id == record_id
+    ).all()
     
     # Organize items by category
     items_by_category = {}
+    for completed_item, checklist_item, category in completed_items:
+        if category not in items_by_category:
+            items_by_category[category] = []
+        
+        items_by_category[category].append({
+            'description': checklist_item.description,
+            'completed': completed_item.completed
+        })
     
-    for completed_item in completed_items:
-        checklist_item = ChecklistItem.query.get(completed_item.checklist_item_id)
-        if checklist_item:
-            category = ChecklistCategory.query.get(checklist_item.category_id)
-            if category not in items_by_category:
-                items_by_category[category] = []
-            
-            items_by_category[category].append({
-                'description': checklist_item.description,
-                'completed': completed_item.completed
-            })
+    # Get the notes
+    notes = ChecklistNotes.query.filter_by(checklist_record_id=record_id).first()
     
     return render_template(
         'checklist_detail.html',
