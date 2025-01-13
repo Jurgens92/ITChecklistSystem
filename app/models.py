@@ -37,10 +37,19 @@ class ChecklistRecord(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
     date_performed = db.Column(db.DateTime, default=datetime.utcnow)
     items_completed = db.relationship('CompletedItem', backref='record')
+    notes = db.relationship('ChecklistNotes', backref='record', lazy='dynamic')
 
     @property
     def completed_count(self):
         return CompletedItem.query.filter_by(record_id=self.id, completed=True).count()
+
+class ChecklistNotes(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    checklist_record_id = db.Column(db.Integer, db.ForeignKey('checklist_record.id'))
+    note_text = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
+    user = db.relationship('User', backref='notes')
 
 class CompletedItem(db.Model):
     id = db.Column(db.Integer, primary_key=True)

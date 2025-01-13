@@ -41,10 +41,37 @@
         </div>
         {% endfor %}
 
+        <div class="notes-section">
+            <h2>Additional Notes</h2>
+            <textarea name="notes" class="notes-textarea" 
+                      placeholder="Enter any additional notes here..."></textarea>
+        </div>
+        
         <div class="form-actions">
             <button type="submit" class="button">Submit Checklist</button>
             <a href="{{ url_for('main.dashboard') }}" class="button secondary">Back to Dashboard</a>
         </div>
     </form>
 </div>
+
+<style>
+    .notes-section {
+        margin-top: 20px;
+        background-color: white;
+        padding: 20px;
+        border-radius: 5px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+    
+    .notes-textarea {
+        width: 100%;
+        min-height: 150px;
+        padding: 10px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        margin-top: 10px;
+        resize: vertical;
+    }
+    </style>
+    
 {% endblock %}
