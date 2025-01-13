@@ -681,32 +681,6 @@ def edit_template(template_id):
         items_by_category=items_by_category
     )
 
-@main.route("/edit-client-checklist/<int:client_id>", methods=["GET", "POST"])
-@login_required
-def edit_client_checklist(client_id):
-    client = Client.query.get_or_404(client_id)
-
-    if request.method == "POST":
-        # Handle client checklist updates
-        items_data = request.get_json()
-
-        # Clear existing items
-        client_checklist.query.filter_by(client_id=client_id).delete()
-
-        # Add new items
-        for item in items_data:
-            new_item = client_checklist(
-                description=item["description"],
-                category=item["category"],
-                client_id=client_id,
-            )
-            db.session.add(new_item)
-
-        db.session.commit()
-        return {"status": "success"}
-
-    return render_template("edit_client_checklist.html", client=client)
-
 @main.route("/add-template-to-client/<int:client_id>", methods=["POST"])
 @login_required
 def add_template_to_client(client_id):
