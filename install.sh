@@ -1,7 +1,5 @@
 #!/bin/bash
 
-# install.sh
-
 # Exit on any error
 set -e
 
@@ -53,6 +51,11 @@ if [ -d "/var/www/itchecklist/.git" ]; then
 else
     git clone https://github.com/Jurgens92/ITChecklistSystem.git .
 fi
+
+# Generate and set random secret key
+print_message "Generating random secret key..."
+RANDOM_KEY=$(python3 -c 'import secrets; print(secrets.token_hex(16))')
+sed -i "s/SECRET_KEY = 'dev'/SECRET_KEY = '$RANDOM_KEY'/" config.py
 
 # Create virtual environment
 print_message "Setting up Python virtual environment..."
@@ -151,6 +154,7 @@ print_warning "Default login credentials:"
 print_warning "Username: admin"
 print_warning "Password: admin"
 print_warning "Please change these credentials after first login!"
+print_warning "A random SECRET_KEY has been generated for security"
 
 # Print update instructions
 echo ""
