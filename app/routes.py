@@ -9,6 +9,7 @@ from app.models import (
     CompletedItem,
     TemplateItem,
     ChecklistCategory,
+    ChecklistNotes,
 )
 from app import db
 from sqlalchemy import func, text
@@ -119,6 +120,7 @@ def submit_checklist():
         return redirect(url_for("main.dashboard"))
         
     completed_item_ids = request.form.getlist("items")
+    notes_text = request.form.get("notes")
     
     # Create a new checklist record
     record = ChecklistRecord(
@@ -128,10 +130,17 @@ def submit_checklist():
     db.session.add(record)
     db.session.commit()
     
-    # Get all checklist items for this client
-    client_items = ChecklistItem.query.filter_by(client_id=client_id).all()
+    # Add notes if provided
+    if notes_text and notes_text.strip():
+        notes = ChecklistNotes(
+            checklist_record_id=record.id,
+            note_text=notes_text.strip(),
+            user_id=current_user.id
+        )
+        db.session.add(notes)
     
     # Create completed items entries
+    client_items = ChecklistItem.query.filter_by(client_id=client_id).all()
     for item in client_items:
         completed_item = CompletedItem(
             record_id=record.id,
@@ -283,6 +292,9 @@ def export_client_report(client_id):
         # Get all completed items for this record
         completed_items = CompletedItem.query.filter_by(record_id=record.id).all()
         
+        # Get notes for this record
+        notes = ChecklistNotes.query.filter_by(checklist_record_id=record.id).first()
+        
         for completed_item in completed_items:
             # Get the checklist item details
             checklist_item = ChecklistItem.query.get(completed_item.checklist_item_id)
@@ -297,6 +309,21 @@ def export_client_report(client_id):
                     Paragraph(checklist_item.description, styles['Normal']),
                     'Completed' if completed_item.completed else 'Not Completed'
                 ])
+        
+        # Add notes if they exist
+        if notes:
+            # Add a spacer row
+            table_data.append(['', '', '', '', ''])
+            # Add the notes row
+            table_data.append([
+                record.date_performed.strftime('%Y-%m-%d %H:%M'),
+                record.user.username,
+                'Notes',
+                Paragraph(notes.note_text, styles['Normal']),
+                ''
+            ])
+            # Add another spacer row
+            table_data.append(['', '', '', '', ''])
 
     if len(table_data) > 1:
         # Calculate column widths
@@ -796,6 +823,9 @@ def checklist_detail(record_id):
     # Get all completed items for this record
     completed_items = CompletedItem.query.filter_by(record_id=record.id).all()
     
+    # Get the notes for this record
+    notes = ChecklistNotes.query.filter_by(checklist_record_id=record.id).first()
+    
     # Organize items by category
     items_by_category = {}
     
@@ -814,7 +844,8 @@ def checklist_detail(record_id):
     return render_template(
         'checklist_detail.html',
         record=record,
-        items_by_category=items_by_category
+        items_by_category=items_by_category,
+        notes=notes
     )
 
 @main.route("/change-password", methods=["GET", "POST"])
