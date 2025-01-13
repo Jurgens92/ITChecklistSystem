@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="checklist-detail-container">
+    <h1>Checklist Details</h1>
+    
+    <div class="checklist-info">
+        <p><strong>Client:</strong> {{ record.client.name }}</p>
+        <p><strong>Performed By:</strong> {{ record.user.username }}</p>
+        <p><strong>Date:</strong> {{ record.date_performed.strftime('%Y-%m-%d %H:%M') }}</p>
+    </div>
+
+    <div class="checklist-items">
+        {% for category, items in items_by_category.items() %}
+        <div class="category-section">
+            <h2>{{ category.name }}</h2>
+            <div class="items-list">
+                {% for item in items %}
+                <div class="checklist-item {% if item.completed %}completed{% endif %}">
+                    <span class="status-icon">{{ '✓' if item.completed else '✗' }}</span>
+                    <span class="item-description">{{ item.description }}</span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="actions">
+        <a href="{{ url_for('main.client_report', client_id=record.client_id) }}" class="button secondary">Back to Report</a>
+    </div>
+</div>
+
+<style>
+.checklist-detail-container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+.checklist-info {
+    background: white;
+    padding: 20px;
+    border-radius: 5px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+
+.category-section {
+    background: white;
+    padding: 20px;
+    border-radius: 5px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+
+.checklist-item {
+    padding: 10px;
+    border-bottom: 1px solid #eee;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.checklist-item:last-child {
+    border-bottom: none;
+}
+
+.status-icon {
+    font-size: 1.2em;
+}
+
+.checklist-item.completed .status-icon {
+    color: #28a745;
+}
+
+.checklist-item:not(.completed) .status-icon {
+    color: #dc3545;
+}
+
+.actions {
+    margin-top: 20px;
+}
+</style>
+{% endblock %}

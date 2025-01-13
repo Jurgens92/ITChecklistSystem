@@ -787,3 +787,32 @@ def edit_client_structure(client_id):
         categories=categories,
         items_by_category=items_by_category
     )
+
+@main.route("/checklist-detail/<int:record_id>")
+@login_required
+def checklist_detail(record_id):
+    record = ChecklistRecord.query.get_or_404(record_id)
+    
+    # Get all completed items for this record
+    completed_items = CompletedItem.query.filter_by(record_id=record.id).all()
+    
+    # Organize items by category
+    items_by_category = {}
+    
+    for completed_item in completed_items:
+        checklist_item = ChecklistItem.query.get(completed_item.checklist_item_id)
+        if checklist_item:
+            category = ChecklistCategory.query.get(checklist_item.category_id)
+            if category not in items_by_category:
+                items_by_category[category] = []
+            
+            items_by_category[category].append({
+                'description': checklist_item.description,
+                'completed': completed_item.completed
+            })
+    
+    return render_template(
+        'checklist_detail.html',
+        record=record,
+        items_by_category=items_by_category
+    )
