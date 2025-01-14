@@ -277,12 +277,34 @@ function showSummary(summary, notes) {
 }
 function copySummary() {
     const summaryText = document.getElementById('summaryContent').textContent;
-    navigator.clipboard.writeText(summaryText).then(() => {
-        alert('Summary copied to clipboard!');
-    }).catch(err => {
-        console.error('Failed to copy text: ', err);
-        alert('Failed to copy summary');
-    });
+    
+    // Create temporary textarea element
+    const textarea = document.createElement('textarea');
+    textarea.value = summaryText;
+    
+    // Make the textarea invisible and add it to the document
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = 0;
+    document.body.appendChild(textarea);
+    
+    // Select and copy the text
+    textarea.select();
+    let success = false;
+    
+    try {
+        success = document.execCommand('copy');
+        if (success) {
+            alert('Summary copied to clipboard!');
+        } else {
+            alert('Unable to copy automatically. Please press Ctrl+C to copy.');
+        }
+    } catch (err) {
+        alert('Unable to copy automatically. Please press Ctrl+C to copy.');
+        console.error('Copy failed:', err);
+    }
+    
+    // Clean up by removing the temporary textarea
+    document.body.removeChild(textarea);
 }
 
 function closeSummaryModal() {
