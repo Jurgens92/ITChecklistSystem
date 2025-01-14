@@ -38,7 +38,12 @@
                 {% for client, count in active_clients %}
                 <tr>
                     <td>{{ client.name }}</td>
-                    <td>{{ count }}</td>
+                    <td>
+                        <a href="{{ url_for('main.client_report', client_id=client.id) }}" 
+                           class="check-count-link">
+                            {{ count }}
+                        </a>
+                    </td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -58,7 +63,12 @@
                 {% for user, count in active_users %}
                 <tr>
                     <td>{{ user.username }}</td>
-                    <td>{{ count }}</td>
+                    <td>
+                        <a href="{{ url_for('main.user_report', user_id=user.id) }}" 
+                           class="check-count-link">
+                            {{ count }}
+                        </a>
+                    </td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -69,4 +79,17 @@
         <a href="{{ url_for('main.reports') }}" class="button secondary">Back to Reports</a>
     </div>
 </div>
+
+<style>
+    .check-count-link {
+        color: #007bff;
+        text-decoration: none;
+        cursor: pointer;
+    }
+    
+    .check-count-link:hover {
+        text-decoration: underline;
+    }
+</style>
+
 {% endblock %}
