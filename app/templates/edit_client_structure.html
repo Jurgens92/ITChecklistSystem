@@ -27,12 +27,8 @@
         
         <div class="add-category-section">
             <h3>Add New Category</h3>
-            <select id="categorySelect">
-                {% for category in categories %}
-                <option value="{{ category.id }}">{{ category.name }}</option>
-                {% endfor %}
-            </select>
-            <button onclick="addCategory()" class="button">Add Category</button>
+            <input type="text" id="newCategoryName" placeholder="Enter new category name">
+            <button onclick="addCustomCategory()" class="button">Add Category</button>
         </div>
     </div>
 
@@ -42,71 +38,6 @@
     </div>
 </div>
 
-<style>
-.edit-structure-container {
-    max-width: 800px;
-    margin: 0 auto;
-    padding: 20px;
-}
-
-.category-section {
-    background: white;
-    padding: 20px;
-    margin: 20px 0;
-    border-radius: 5px;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-}
-
-.category-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 15px;
-}
-
-.checklist-item {
-    display: flex;
-    gap: 10px;
-    margin-bottom: 10px;
-}
-
-.item-input {
-    flex: 1;
-    padding: 8px;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-}
-
-.remove-item-btn {
-    background: #dc3545;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    padding: 0 10px;
-    cursor: pointer;
-}
-
-.add-item-btn {
-    background: #28a745;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    padding: 8px 16px;
-    cursor: pointer;
-    margin-top: 10px;
-}
-
-.form-actions {
-    margin-top: 20px;
-    display: flex;
-    gap: 10px;
-    justify-content: flex-end;
-}
-
-.save-btn {
-    background: #007bff;
-}
-</style>
 
 <script>
 function addItem(categoryId) {
@@ -159,6 +90,52 @@ function removeCategory(button) {
     button.closest('.category-section').remove();
 }
 
+function addCustomCategory() {
+    const categoryName = document.getElementById('newCategoryName').value.trim();
+    
+    if (!categoryName) {
+        alert('Please enter a category name');
+        return;
+    }
+    
+    fetch(`/add-custom-category/{{ client.id }}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ name: categoryName })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            const categoriesContainer = document.getElementById('categories-container');
+            
+            const newCategory = document.createElement('div');
+            newCategory.className = 'category-section';
+            newCategory.dataset.categoryId = data.category.id;
+            newCategory.innerHTML = `
+                <div class="category-header">
+                    <h3>${data.category.name}</h3>
+                    <button type="button" class="remove-category-btn" onclick="removeCategory(this)">Remove Category</button>
+                </div>
+                <div class="items-list"></div>
+                <button type="button" class="add-item-btn" onclick="addItem(${data.category.id})">Add Item</button>
+            `;
+            
+            categoriesContainer.appendChild(newCategory);
+            
+            // Clear the input
+            document.getElementById('newCategoryName').value = '';
+        } else {
+            alert('Error adding category: ' + (data.error || 'Unknown error'));
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error adding category. Please try again.');
+    });
+}
+
 function saveChanges() {
     const categories = [];
     document.querySelectorAll('.category-section').forEach(categorySection => {
@@ -202,4 +179,88 @@ function saveChanges() {
     });
 }
 </script>
+
+
+<style>
+    .edit-structure-container {
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 20px;
+    }
+    
+    .category-section {
+        background: white;
+        padding: 20px;
+        margin: 20px 0;
+        border-radius: 5px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+    
+    .category-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 15px;
+    }
+    
+    .checklist-item {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 10px;
+    }
+    
+    .item-input {
+        flex: 1;
+        padding: 8px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+    }
+    
+    .remove-item-btn {
+        background: #dc3545;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        padding: 0 10px;
+        cursor: pointer;
+    }
+    
+    .add-item-btn {
+        background: #28a745;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        padding: 8px 16px;
+        cursor: pointer;
+        margin-top: 10px;
+    }
+    
+    .form-actions {
+        margin-top: 20px;
+        display: flex;
+        gap: 10px;
+        justify-content: flex-end;
+    }
+    
+    .save-btn {
+        background: #007bff;
+    }
+
+    .add-category-section {
+    margin-top: 20px;
+    padding: 20px;
+    background-color: #f8f9fa;
+    border-radius: 5px;
+    }
+
+    .add-category-section input {
+    padding: 8px;
+    margin-right: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    width: 250px;
+    
+    }
+    </style>
+
 {% endblock %}

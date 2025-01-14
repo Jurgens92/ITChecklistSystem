@@ -852,6 +852,45 @@ def edit_client_structure(client_id):
         items_by_category=items_by_category
     )
 
+@main.route('/add-custom-category/<int:client_id>', methods=['POST'])
+@login_required
+def add_custom_category(client_id):
+    if not current_user.is_admin:
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    data = request.get_json()
+    category_name = data.get('name')
+    
+    if not category_name:
+        return jsonify({'error': 'Category name is required'}), 400
+        
+    try:
+        # Find or create a default template
+        default_template = ChecklistTemplate.query.filter_by(is_default=True).first()
+        if not default_template:
+            default_template = ChecklistTemplate(name='Default Template', is_default=True)
+            db.session.add(default_template)
+            db.session.flush()
+
+        # Create new category associated with the template
+        category = ChecklistCategory(
+            name=category_name,
+            template_id=default_template.id
+        )
+        db.session.add(category)
+        db.session.commit()
+        
+        return jsonify({
+            'status': 'success',
+            'category': {
+                'id': category.id,
+                'name': category.name
+            }
+        })
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
 @main.route("/checklist-detail/<int:record_id>")
 @login_required
 def checklist_detail(record_id):
