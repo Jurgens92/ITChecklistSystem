@@ -132,28 +132,31 @@ def client_checklist(client_id):
 @main.route("/submit_checklist", methods=["POST"])
 @login_required
 def submit_checklist():
-    client_id = request.form.get("client_id")
-    if not client_id:
-        flash("No client specified")
-        return redirect(url_for("main.dashboard"))
-        
-    completed_item_ids = request.form.getlist("items")
-    notes_text = request.form.get("notes", "")
-    
     try:
+        client_id = request.form.get("client_id")
+        if not client_id:
+            return jsonify({
+                "status": "error",
+                "message": "No client specified"
+            }), 400
+
+        completed_item_ids = request.form.getlist("items")
+        notes_text = request.form.get("notes", "").strip()
+        
         # Create a new checklist record
         record = ChecklistRecord(
             client_id=client_id,
-            user_id=current_user.id
+            user_id=current_user.id,
+            date_performed=datetime.utcnow()
         )
         db.session.add(record)
         db.session.flush()  # Get the record ID
         
         # Add notes if provided
-        if notes_text and notes_text.strip():
+        if notes_text:
             notes = ChecklistNotes(
                 checklist_record_id=record.id,
-                note_text=notes_text.strip(),
+                note_text=notes_text,
                 user_id=current_user.id
             )
             db.session.add(notes)
@@ -175,18 +178,20 @@ def submit_checklist():
             # Build summary data for completed items
             if completed:
                 category = ChecklistCategory.query.get(item.category_id)
-                if category.name not in summary_data:
-                    summary_data[category.name] = []
-                summary_data[category.name].append(item.description)
+                if category:
+                    category_name = category.name
+                    if category_name not in summary_data:
+                        summary_data[category_name] = []
+                    summary_data[category_name].append(item.description)
         
         db.session.commit()
 
-        # Only return JSON if it's an AJAX request
+        # Return appropriate response based on request type
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
             return jsonify({
                 'status': 'success',
                 'summary': summary_data,
-                'notes': notes_text.strip(),
+                'notes': notes_text,
                 'clearStorage': True,
                 'clientId': client_id
             })
@@ -194,20 +199,17 @@ def submit_checklist():
         # For regular form submit, store data in session and redirect
         session['checklist_summary'] = {
             'summary': summary_data,
-            'notes': notes_text.strip()
+            'notes': notes_text
         }
-        # Return HTML with script to clear localStorage before redirecting
-        return f"""
-        <script>
-            localStorage.removeItem('checklist_state_{client_id}');
-            window.location.href = '{url_for("main.checklist_summary")}';
-        </script>
-        """
+        return redirect(url_for("main.checklist_summary"))
         
     except Exception as e:
+        print(f"Error submitting checklist: {str(e)}")  # Server-side logging
         db.session.rollback()
-        flash(f"Error submitting checklist: {str(e)}")
-        return redirect(url_for("main.dashboard"))
+        return jsonify({
+            "status": "error",
+            "message": f"Error submitting checklist: {str(e)}"
+        }), 500
 
 @main.route("/checklist-summary")
 @login_required
