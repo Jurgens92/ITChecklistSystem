@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, redirect, url_for, flash, request, jsonify, send_file
+from flask import Blueprint, render_template, redirect, url_for, flash, request, jsonify, send_file, session
 from flask_login import login_user, logout_user, login_required, current_user
 from app.models import (
     User,
@@ -138,53 +138,84 @@ def submit_checklist():
         return redirect(url_for("main.dashboard"))
         
     completed_item_ids = request.form.getlist("items")
-    notes_text = request.form.get("notes")
-    
-    # Create a new checklist record
-    record = ChecklistRecord(
-        client_id=client_id,
-        user_id=current_user.id
-    )
-    db.session.add(record)
-    db.session.flush()  # Get the record ID
-    
-    # Add notes if provided
-    if notes_text and notes_text.strip():
-        notes = ChecklistNotes(
-            checklist_record_id=record.id,
-            note_text=notes_text.strip(),
-            user_id=current_user.id
-        )
-        db.session.add(notes)
-    
-    # Get all items for this client
-    client_items = ChecklistItem.query.filter_by(client_id=client_id).all()
-    
-    # Create CompletedItem entries
-    for item in client_items:
-        completed = str(item.id) in completed_item_ids
-        completed_item = CompletedItem(
-            record_id=record.id,
-            checklist_item_id=item.id,
-            completed=completed
-        )
-        db.session.add(completed_item)
+    notes_text = request.form.get("notes", "")
     
     try:
+        # Create a new checklist record
+        record = ChecklistRecord(
+            client_id=client_id,
+            user_id=current_user.id
+        )
+        db.session.add(record)
+        db.session.flush()  # Get the record ID
+        
+        # Add notes if provided
+        if notes_text and notes_text.strip():
+            notes = ChecklistNotes(
+                checklist_record_id=record.id,
+                note_text=notes_text.strip(),
+                user_id=current_user.id
+            )
+            db.session.add(notes)
+        
+        # Get all items for this client
+        client_items = ChecklistItem.query.filter_by(client_id=client_id).all()
+        
+        # Create CompletedItem entries and build summary data
+        summary_data = {}
+        for item in client_items:
+            completed = str(item.id) in completed_item_ids
+            completed_item = CompletedItem(
+                record_id=record.id,
+                checklist_item_id=item.id,
+                completed=completed
+            )
+            db.session.add(completed_item)
+            
+            # Build summary data for completed items
+            if completed:
+                category = ChecklistCategory.query.get(item.category_id)
+                if category.name not in summary_data:
+                    summary_data[category.name] = []
+                summary_data[category.name].append(item.description)
+        
         db.session.commit()
-        flash("Checklist submitted successfully")
-        # Return JavaScript that clears localStorage and redirects
+
+        # Only return JSON if it's an AJAX request
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({
+                'status': 'success',
+                'summary': summary_data,
+                'notes': notes_text.strip(),
+                'clearStorage': True,
+                'clientId': client_id
+            })
+        
+        # For regular form submit, store data in session and redirect
+        session['checklist_summary'] = {
+            'summary': summary_data,
+            'notes': notes_text.strip()
+        }
+        # Return HTML with script to clear localStorage before redirecting
         return f"""
         <script>
             localStorage.removeItem('checklist_state_{client_id}');
-            window.location.href = '{url_for("main.dashboard")}';
+            window.location.href = '{url_for("main.checklist_summary")}';
         </script>
         """
+        
     except Exception as e:
         db.session.rollback()
         flash(f"Error submitting checklist: {str(e)}")
         return redirect(url_for("main.dashboard"))
-    
+
+@main.route("/checklist-summary")
+@login_required
+def checklist_summary():
+    summary_data = session.pop('checklist_summary', None)
+    if not summary_data:
+        return redirect(url_for('main.dashboard'))
+    return render_template('checklist_summary.html', summary=summary_data)
 
 @main.route("/reports")
 @login_required
