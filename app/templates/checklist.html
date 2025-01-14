@@ -52,7 +52,70 @@
             <a href="{{ url_for('main.dashboard') }}" class="button secondary">Back to Dashboard</a>
         </div>
     </form>
+
+    <script>
+        function getStorageKey(clientId) {
+            return `checklist_state_${clientId}`;
+        }
+        
+        function saveChecklistState() {
+            const clientId = document.querySelector('input[name="client_id"]').value;
+            const checkboxes = document.querySelectorAll('input[type="checkbox"]');
+            const notes = document.querySelector('textarea[name="notes"]').value;
+            
+            const state = {
+                date: new Date().toDateString(),
+                checkedItems: Array.from(checkboxes)
+                    .filter(cb => cb.checked)
+                    .map(cb => cb.value),
+                notes: notes
+            };
+            
+            localStorage.setItem(getStorageKey(clientId), JSON.stringify(state));
+        }
+        
+        function loadChecklistState() {
+            const clientId = document.querySelector('input[name="client_id"]').value;
+            const savedState = localStorage.getItem(getStorageKey(clientId));
+            
+            if (!savedState) return;
+            
+            const state = JSON.parse(savedState);
+            
+            // Clear state if it's from a previous day
+            if (state.date !== new Date().toDateString()) {
+                localStorage.removeItem(getStorageKey(clientId));
+                return;
+            }
+            
+            // Restore checked items
+            state.checkedItems.forEach(itemId => {
+                const checkbox = document.querySelector(`input[type="checkbox"][value="${itemId}"]`);
+                if (checkbox) checkbox.checked = true;
+            });
+            
+            // Restore notes
+            const notesTextarea = document.querySelector('textarea[name="notes"]');
+            if (notesTextarea && state.notes) {
+                notesTextarea.value = state.notes;
+            }
+        }
+        
+        // Save state when items are checked/unchecked
+        document.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
+            checkbox.addEventListener('change', saveChecklistState);
+        });
+        
+        // Save state when notes are updated (using input event for real-time saving)
+        document.querySelector('textarea[name="notes"]').addEventListener('input', saveChecklistState);
+        
+        // Load state when page loads
+        document.addEventListener('DOMContentLoaded', loadChecklistState);
+        </script>
+
 </div>
+
+
 
 <style>
     .notes-section {

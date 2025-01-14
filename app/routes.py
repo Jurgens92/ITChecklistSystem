@@ -173,11 +173,18 @@ def submit_checklist():
     try:
         db.session.commit()
         flash("Checklist submitted successfully")
+        # Return JavaScript that clears localStorage and redirects
+        return f"""
+        <script>
+            localStorage.removeItem('checklist_state_{client_id}');
+            window.location.href = '{url_for("main.dashboard")}';
+        </script>
+        """
     except Exception as e:
         db.session.rollback()
         flash(f"Error submitting checklist: {str(e)}")
-        
-    return redirect(url_for("main.dashboard"))
+        return redirect(url_for("main.dashboard"))
+    
 
 @main.route("/reports")
 @login_required
