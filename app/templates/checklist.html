@@ -10,17 +10,17 @@
         <a href="{{ url_for('main.edit_client_structure', client_id=client.id) }}" class="button">Edit Checklist Structure</a>
     </div>
 
-<div class="template-actions">
-    <form method="POST" action="{{ url_for('main.add_template_to_client', client_id=client.id) }}" class="add-template-form">
-        <select name="template_id" required>
-            <option value="">Select template to add...</option>
-            {% for template in templates %}
-            <option value="{{ template.id }}">{{ template.name }}</option>
-            {% endfor %}
-        </select>
-        <button type="submit" class="button">Add Template</button>
-    </form>
-</div>
+    <div class="template-actions">
+        <form method="POST" action="{{ url_for('main.add_template_to_client', client_id=client.id) }}" class="add-template-form template-addition-form">
+            <select name="template_id" required>
+                <option value="">Select template to add...</option>
+                {% for template in templates %}
+                <option value="{{ template.id }}">{{ template.name }}</option>
+                {% endfor %}
+            </select>
+            <button type="submit" class="button">Add Template</button>
+        </form>
+    </div>
 {% endif %}
     
 <form method="POST" action="{{ url_for('main.submit_checklist') }}">
@@ -190,7 +190,7 @@
 </style>
 
 <script>
-document.querySelector('form').onsubmit = function(e) {
+document.querySelector('form:not(.template-addition-form)').onsubmit = function(e) {
     e.preventDefault();
     
     fetch("{{ url_for('main.submit_checklist') }}", {
