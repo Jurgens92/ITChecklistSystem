@@ -19,10 +19,11 @@ class User(UserMixin, db.Model):
 
 class Client(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(100), nullable=False)
+    name = db.Column(db.String(100), nullable=False, unique=True)
     is_active = db.Column(db.Boolean, default=True)
-    checklist_records = db.relationship('ChecklistRecord', backref='client')
+    checklist_records = db.relationship('ChecklistRecord', backref='client', cascade='all, delete-orphan')
     checklists = db.relationship('ClientChecklist', backref='client', cascade='all, delete-orphan')
+    checklist_items = db.relationship('ChecklistItem', backref='client', cascade='all, delete-orphan')
 
 class ChecklistItem(db.Model):
     id = db.Column(db.Integer, primary_key=True)

@@ -459,8 +459,9 @@ def add_client():
     template_id = request.form.get("template_id")
     
     if client_name:
-        # Check for existing client
-        if Client.query.filter_by(name=client_name).first():
+        # Check if client already exists
+        existing_client = Client.query.filter(func.lower(Client.name) == func.lower(client_name)).first()
+        if existing_client:
             flash("A client with this name already exists.")
             return redirect(url_for("main.manage_clients"))
             
@@ -799,14 +800,14 @@ def delete_client(client_id):
     client = Client.query.get_or_404(client_id)
 
     try:
-        # Delete associated records first
-        ChecklistRecord.query.filter_by(client_id=client_id).delete()
+        # Delete the client - this should cascade to all related items
         db.session.delete(client)
         db.session.commit()
         flash(f"Client {client.name} has been deleted.")
     except Exception as e:
         db.session.rollback()
         flash(f"Error deleting client: {str(e)}")
+        print(f"DEBUG: Error details: {str(e)}")
 
     return redirect(url_for("main.manage_clients"))
 
