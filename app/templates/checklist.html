@@ -23,35 +23,35 @@
 </div>
 {% endif %}
     
-    <form method="POST" action="{{ url_for('main.submit_checklist') }}">
-        <input type="hidden" name="client_id" value="{{ client.id }}">
-        
-        {% for category, items in items_by_category.items() %}
-        <div class="checklist-section">
-            <h2>{{ category.name }}</h2>
-            {% for item in items %}
-            <div class="checklist-item">
-                <label>
-                    <input type="checkbox" name="items" value="{{ item.id }}" 
-                           {% if item.completed %}checked{% endif %}>
-                    {{ item.description }}
-                </label>
-            </div>
-            {% endfor %}
+<form method="POST" action="{{ url_for('main.submit_checklist') }}">
+    <input type="hidden" name="client_id" value="{{ client.id }}">
+    
+    {% for category, items in items_by_category.items() %}
+    <div class="checklist-section">
+        <h2>{{ category.name }}</h2>
+        {% for item in items %}
+        <div class="checklist-item">
+            <label>
+                <input type="checkbox" name="items" value="{{ item.id }}" 
+                       {% if item.completed %}checked{% endif %}>
+                {{ item.description }}
+            </label>
         </div>
         {% endfor %}
+    </div>
+    {% endfor %}
 
-        <div class="notes-section">
-            <h2>Additional Notes</h2>
-            <textarea name="notes" class="notes-textarea" 
-                      placeholder="Enter any additional notes here..."></textarea>
-        </div>
-        
-        <div class="form-actions">
-            <button type="submit" class="button">Submit Checklist</button>
-            <a href="{{ url_for('main.dashboard') }}" class="button secondary">Back to Dashboard</a>
-        </div>
-    </form>
+    <div class="notes-section">
+        <h2>Additional Notes</h2>
+        <textarea name="notes" class="notes-textarea" 
+                  placeholder="Enter any additional notes here..."></textarea>
+    </div>
+    
+    <div class="form-actions">
+        <button type="submit" class="button">Submit Checklist</button>
+        <a href="{{ url_for('main.dashboard') }}" class="button secondary">Back to Dashboard</a>
+    </div>
+</form>
 
     <script>
         function getStorageKey(clientId) {
@@ -115,8 +115,6 @@
 
 </div>
 
-
-
 <style>
     .notes-section {
         margin-top: 20px;
@@ -136,5 +134,118 @@
         resize: vertical;
     }
     </style>
+
+
+<div id="summaryModal" class="modal" style="display: none;">
+    <div class="modal-content">
+        <h2>Checklist Summary</h2>
+        <div id="summaryContent"></div>
+        <div class="modal-actions">
+            <button onclick="copySummary()" class="button">Copy Summary</button>
+            <button onclick="closeSummaryModal()" class="button secondary">Close</button>
+        </div>
+    </div>
+</div>
+
+<style>
+/* Add these styles */
+.modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0,0,0,0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.modal-content {
+    background: white;
+    padding: 20px;
+    border-radius: 5px;
+    max-width: 600px;
+    width: 90%;
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
+#summaryContent {
+    white-space: pre-wrap;
+    font-family: monospace;
+    background: #f5f5f5;
+    padding: 15px;
+    border-radius: 4px;
+    margin: 15px 0;
+}
+
+.modal-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    margin-top: 20px;
+}
+</style>
+
+<script>
+document.querySelector('form').onsubmit = function(e) {
+    e.preventDefault();
+    
+    fetch("{{ url_for('main.submit_checklist') }}", {
+        method: 'POST',
+        body: new FormData(this)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            showSummary(data.summary, data.notes);
+        } else {
+            alert('Error submitting checklist: ' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error submitting checklist');
+    });
+};
+
+function showSummary(summary, notes) {
+    let summaryText = '';
+    
+    // Add categories and items
+    for (const [category, items] of Object.entries(summary)) {
+        summaryText += `${category}:\n`;
+        items.forEach(item => {
+            summaryText += `- ${item}\n`;
+        });
+        summaryText += '\n';
+    }
+    
+    // Add notes if present
+    if (notes) {
+        summaryText += `Notes:\n${notes}\n`;
+    }
+    
+    document.getElementById('summaryContent').textContent = summaryText;
+    document.getElementById('summaryModal').style.display = 'flex';
+}
+
+function copySummary() {
+    const summaryText = document.getElementById('summaryContent').textContent;
+    navigator.clipboard.writeText(summaryText).then(() => {
+        alert('Summary copied to clipboard!');
+    }).catch(err => {
+        console.error('Failed to copy text: ', err);
+        alert('Failed to copy summary');
+    });
+}
+
+function closeSummaryModal() {
+    document.getElementById('summaryModal').style.display = 'none';
+    window.location.href = "{{ url_for('main.dashboard') }}";
+}
+</script>
     
 {% endblock %}
