@@ -2,6 +2,7 @@ from app import db
 from flask_login import UserMixin
 from datetime import datetime
 from werkzeug.security import generate_password_hash, check_password_hash
+from sqlalchemy import event, UniqueConstraint
 
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -41,15 +42,10 @@ class ChecklistRecord(db.Model):
 
     @property
     def completed_count(self):
-        # Fix the completed count calculation
         return CompletedItem.query.filter_by(
             record_id=self.id,
             completed=True
         ).count()
-
-    @property
-    def total_items(self):
-        return CompletedItem.query.filter_by(record_id=self.id).count()
 
 class ChecklistNotes(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -60,10 +56,17 @@ class ChecklistNotes(db.Model):
     user = db.relationship('User', backref='notes')
 
 class CompletedItem(db.Model):
+    __tablename__ = 'completed_items'
+    __table_args__ = (
+        UniqueConstraint('record_id', 'checklist_item_id', name='uix_record_item'),
+    )
+    
     id = db.Column(db.Integer, primary_key=True)
-    record_id = db.Column(db.Integer, db.ForeignKey('checklist_record.id'))
-    checklist_item_id = db.Column(db.Integer, db.ForeignKey('checklist_item.id'))
+    record_id = db.Column(db.Integer, db.ForeignKey('checklist_record.id', ondelete='CASCADE'))
+    checklist_item_id = db.Column(db.Integer, db.ForeignKey('checklist_item.id', ondelete='CASCADE'))
     completed = db.Column(db.Boolean, default=False)
+    completed_at = db.Column(db.DateTime, default=datetime.utcnow)
+    completed_by = db.Column(db.Integer, db.ForeignKey('user.id'))
 
 class ChecklistTemplate(db.Model):
     id = db.Column(db.Integer, primary_key=True)

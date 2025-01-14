@@ -1,5 +1,6 @@
-from flask import Blueprint, render_template, redirect, url_for, flash, request, jsonify, send_file, session
+from flask import Blueprint, render_template, redirect, url_for, flash, request, jsonify, send_file, session, current_app
 from flask_login import login_user, logout_user, login_required, current_user
+from collections import defaultdict
 from app.models import (
     User,
     Client,
@@ -17,9 +18,11 @@ from datetime import datetime, timedelta
 
 from io import BytesIO
 from reportlab.lib import colors
-from reportlab.lib.pagesizes import letter
-from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.pagesizes import letter, landscape
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import inch
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.lib.enums import TA_LEFT, TA_CENTER
 
 main = Blueprint("main", __name__)
 
@@ -71,15 +74,15 @@ def logout():
 def client_checklist(client_id):
     client = Client.query.get_or_404(client_id)
     
-    # Get all available templates for the dropdown
-    templates = ChecklistTemplate.query.all()  # Add this line
+    # Get all available templates
+    templates = ChecklistTemplate.query.all()
+    print(f"DEBUG: Found {len(templates)} templates")  # Debug line
     
     # Get all items for this client
     items_by_category = {}
     categories = ChecklistCategory.query.all()
     
     for category in categories:
-        # Get existing items for this client and category
         items = ChecklistItem.query.filter_by(
             client_id=client_id,
             category_id=category.id
@@ -88,40 +91,12 @@ def client_checklist(client_id):
         if items:  # Only add categories that have items
             items_by_category[category] = items
 
-    # If no items exist, create them from the client's template
-    if not items_by_category:
-        # Get the client's template from the most recent addition
-        template = ChecklistTemplate.query.get(request.args.get('template_id', type=int))
+    # Print debug information
+    print(f"DEBUG: Client ID: {client_id}")
+    print(f"DEBUG: Number of templates: {len(templates)}")
+    for template in templates:
+        print(f"DEBUG: Template: {template.name} (ID: {template.id})")
         
-        if not template:
-            # Fallback to default template
-            template = ChecklistTemplate.query.filter_by(is_default=True).first()
-        
-        if template:
-            categories = ChecklistCategory.query.filter_by(template_id=template.id).all()
-            
-            for category in categories:
-                template_items = TemplateItem.query.filter_by(
-                    template_id=template.id,
-                    category_id=category.id
-                ).all()
-                
-                items = []
-                for template_item in template_items:
-                    item = ChecklistItem(
-                        client_id=client_id,
-                        description=template_item.description,
-                        category_id=category.id,
-                        completed=False
-                    )
-                    db.session.add(item)
-                    items.append(item)
-                
-                if items:  # Only add categories that have items
-                    items_by_category[category] = items
-            
-            db.session.commit()
-
     return render_template(
         "checklist.html",
         client=client,
@@ -133,83 +108,108 @@ def client_checklist(client_id):
 @login_required
 def submit_checklist():
     try:
+        # Start transaction
+        db.session.begin_nested()
+        
         client_id = request.form.get("client_id")
         if not client_id:
-            return jsonify({
-                "status": "error",
-                "message": "No client specified"
-            }), 400
+            raise ValueError("No client specified")
 
         completed_item_ids = request.form.getlist("items")
         notes_text = request.form.get("notes", "").strip()
         
-        # Create a new checklist record
-        record = ChecklistRecord(
-            client_id=client_id,
-            user_id=current_user.id,
-            date_performed=datetime.utcnow()
-        )
-        db.session.add(record)
-        db.session.flush()  # Get the record ID
+        # Validate client exists
+        client = Client.query.get_or_404(client_id)
         
-        # Add notes if provided
-        if notes_text:
-            notes = ChecklistNotes(
-                checklist_record_id=record.id,
-                note_text=notes_text,
-                user_id=current_user.id
+        # Create record with proper error handling
+        try:
+            record = ChecklistRecord(
+                client_id=client_id,
+                user_id=current_user.id,
+                date_performed=datetime.utcnow()
             )
-            db.session.add(notes)
-        
-        # Get all items for this client
-        client_items = ChecklistItem.query.filter_by(client_id=client_id).all()
-        
-        # Create CompletedItem entries and build summary data
-        summary_data = {}
-        for item in client_items:
-            completed = str(item.id) in completed_item_ids
-            completed_item = CompletedItem(
-                record_id=record.id,
-                checklist_item_id=item.id,
-                completed=completed
-            )
-            db.session.add(completed_item)
+            db.session.add(record)
+            db.session.flush()  # Get the record ID
             
-            # Build summary data for completed items
-            if completed:
-                category = ChecklistCategory.query.get(item.category_id)
-                if category:
-                    category_name = category.name
-                    if category_name not in summary_data:
-                        summary_data[category_name] = []
-                    summary_data[category_name].append(item.description)
-        
-        db.session.commit()
-
-        # Return appropriate response based on request type
-        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            # Add notes if provided
+            if notes_text:
+                notes = ChecklistNotes(
+                    checklist_record_id=record.id,
+                    note_text=notes_text,
+                    user_id=current_user.id
+                )
+                db.session.add(notes)
+            
+            # Get all items for this client
+            client_items = ChecklistItem.query.filter_by(client_id=client_id).all()
+            
+            # Build summary data while creating CompletedItems
+            summary_data = {}
+            for item in client_items:
+                completed = str(item.id) in completed_item_ids
+                
+                # Check for existing completed item
+                existing_completed = CompletedItem.query.filter_by(
+                    record_id=record.id,
+                    checklist_item_id=item.id
+                ).first()
+                
+                if not existing_completed:
+                    completed_item = CompletedItem(
+                        record_id=record.id,
+                        checklist_item_id=item.id,
+                        completed=completed,
+                        completed_by=current_user.id if completed else None
+                    )
+                    db.session.add(completed_item)
+                
+                # Build summary data
+                if completed:
+                    category = ChecklistCategory.query.get(item.category_id)
+                    if category:
+                        category_name = category.name
+                        if category_name not in summary_data:
+                            summary_data[category_name] = []
+                        summary_data[category_name].append(item.description)
+            
+            db.session.commit()
+            
+            # Clear client session data after successful submission
+            session_key = f'client_{client_id}_checklist'
+            if session_key in session:
+                session.pop(session_key)
+            
             return jsonify({
                 'status': 'success',
                 'summary': summary_data,
                 'notes': notes_text,
-                'clearStorage': True,
-                'clientId': client_id
+                'record_id': record.id
             })
-        
-        # For regular form submit, store data in session and redirect
-        session['checklist_summary'] = {
-            'summary': summary_data,
-            'notes': notes_text
-        }
-        return redirect(url_for("main.checklist_summary"))
-        
+            
+        except IntegrityError as e:
+            db.session.rollback()
+            current_app.logger.error(f"Integrity Error: {str(e)}")
+            return jsonify({
+                "status": "error",
+                "message": "Database integrity error. Possible duplicate entry."
+            }), 400
+            
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f"Error submitting checklist: {str(e)}")
+            return jsonify({
+                "status": "error",
+                "message": "An error occurred while submitting the checklist."
+            }), 500
+            
     except Exception as e:
-        print(f"Error submitting checklist: {str(e)}")  # Server-side logging
-        db.session.rollback()
+        current_app.logger.error(f"Unexpected error: {str(e)}")
         return jsonify({
             "status": "error",
-            "message": f"Error submitting checklist: {str(e)}"
+            "message": "An unexpected error occurred."
         }), 500
+
+
 
 @main.route("/checklist-summary")
 @login_required
@@ -242,7 +242,7 @@ def client_report(client_id):
 
     client = Client.query.get_or_404(client_id)
     
-    # Get records with completed counts
+    # Get records without finalized filter
     records = ChecklistRecord.query.filter_by(client_id=client_id)\
         .order_by(ChecklistRecord.date_performed.desc())\
         .all()
@@ -252,7 +252,6 @@ def client_report(client_id):
         client=client, 
         records=records
     )
-
 
 @main.route("/reports/user/<int:user_id>")
 @login_required
@@ -328,7 +327,7 @@ def export_client_report(client_id):
 
     client = Client.query.get_or_404(client_id)
     
-    # Get all checklist records for this client with their completed items
+    # Get records without pagination
     records = ChecklistRecord.query.filter_by(client_id=client_id)\
         .order_by(ChecklistRecord.date_performed.desc())\
         .all()
@@ -728,52 +727,65 @@ def add_template_to_client(client_id):
         flash("Access denied")
         return redirect(url_for("main.dashboard"))
     
-    client = Client.query.get_or_404(client_id)
     template_id = request.form.get('template_id')
+    print(f"DEBUG: Received template_id: {template_id}")
     
-    if template_id:
+    if not template_id:
+        flash("No template selected")
+        return redirect(url_for("main.client_checklist", client_id=client_id))
+        
+    try:
+        # Convert template_id to integer
+        template_id = int(template_id)
         template = ChecklistTemplate.query.get(template_id)
-        if template:
-            categories = ChecklistCategory.query.filter_by(template_id=template.id).all()
-            duplicates_prevented = 0
-            items_added = 0
+        
+        if not template:
+            flash(f"Template with ID {template_id} not found")
+            return redirect(url_for("main.client_checklist", client_id=client_id))
             
-            for category in categories:
-                template_items = TemplateItem.query.filter_by(
-                    template_id=template.id,
-                    category_id=category.id
-                ).all()
+        # Get template items and categories
+        categories = ChecklistCategory.query.filter_by(template_id=template.id).all()
+        if not categories:
+            flash(f"No categories found for template '{template.name}'")
+            return redirect(url_for("main.client_checklist", client_id=client_id))
+            
+        items_added = 0
+        duplicates_prevented = 0
+        
+        for category in categories:
+            template_items = TemplateItem.query.filter_by(
+                template_id=template.id,
+                category_id=category.id
+            ).all()
+            
+            for item in template_items:
+                # Check for duplicate
+                existing = ChecklistItem.query.filter_by(
+                    client_id=client_id,
+                    category_id=category.id,
+                    description=item.description
+                ).first()
                 
-                for template_item in template_items:
-                    # Check if this item already exists for this client and category
-                    existing_item = ChecklistItem.query.filter_by(
+                if not existing:
+                    new_item = ChecklistItem(
                         client_id=client_id,
-                        category_id=category.id,
-                        description=template_item.description
-                    ).first()
-                    
-                    if not existing_item:
-                        checklist_item = ChecklistItem(
-                            client_id=client_id,
-                            description=template_item.description,
-                            category_id=category.id,
-                            completed=False
-                        )
-                        db.session.add(checklist_item)
-                        items_added += 1
-                    else:
-                        duplicates_prevented += 1
-            
-            try:
-                db.session.commit()
-                if duplicates_prevented > 0:
-                    flash(f"Added {items_added} new items from {template.name} template. "
-                          f"Skipped {duplicates_prevented} duplicate items.")
+                        description=item.description,
+                        category_id=category.id
+                    )
+                    db.session.add(new_item)
+                    items_added += 1
                 else:
-                    flash(f"Successfully added {items_added} items from {template.name} template.")
-            except Exception as e:
-                db.session.rollback()
-                flash(f"Error adding template: {str(e)}")
+                    duplicates_prevented += 1
+        
+        db.session.commit()
+        flash(f"Added {items_added} items from template. Skipped {duplicates_prevented} duplicates.")
+        
+    except ValueError:
+        flash("Invalid template ID")
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Error adding template: {str(e)}")
+        print(f"DEBUG: Error details: {str(e)}")
     
     return redirect(url_for("main.client_checklist", client_id=client_id))
 
