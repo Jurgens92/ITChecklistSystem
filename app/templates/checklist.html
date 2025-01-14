@@ -53,6 +53,31 @@
     </div>
 </form>
 
+<div id="errorMessage" class="error-message" style="display: none;"></div>
+
+<style>
+.error-message {
+    background-color: #f8d7da;
+    border: 1px solid #f5c6cb;
+    color: #721c24;
+    padding: 10px;
+    margin: 10px 0;
+    border-radius: 4px;
+    display: none;
+}
+</style>
+
+<script>
+function showError(message) {
+    const errorDiv = document.getElementById('errorMessage');
+    errorDiv.textContent = message;
+    errorDiv.style.display = 'block';
+    setTimeout(() => {
+        errorDiv.style.display = 'none';
+    }, 5000);
+}
+</script>
+
     <script>
         function getStorageKey(clientId) {
             return `checklist_state_${clientId}`;
@@ -195,19 +220,30 @@ document.querySelector('form:not(.template-addition-form)').onsubmit = function(
     
     fetch("{{ url_for('main.submit_checklist') }}", {
         method: 'POST',
-        body: new FormData(this)
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.status === 'success') {
-            showSummary(data.summary, data.notes);
-        } else {
-            alert('Error submitting checklist: ' + data.message);
+        body: new FormData(this),
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest'
         }
     })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error('Network response was not ok');
+        }
+        return response.json();
+    })
+    .then(data => {
+    if (data.status === 'success') {
+        // Clear localStorage when checklist is successfully submitted
+        const clientId = document.querySelector('input[name="client_id"]').value;
+        localStorage.removeItem(`checklist_state_${clientId}`);
+        showSummary(data.summary, data.notes);
+    } else {
+        alert('Error submitting checklist: ' + (data.message || 'Unknown error'));
+    }
+    })
     .catch(error => {
-        console.error('Error:', error);
-        alert('Error submitting checklist');
+        console.error('Submission error:', error);
+        alert('Error submitting checklist. Please check the console for details.');
     });
 };
 
@@ -228,10 +264,17 @@ function showSummary(summary, notes) {
         summaryText += `Notes:\n${notes}\n`;
     }
     
+    // Clear all checkboxes
+    document.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
+        checkbox.checked = false;
+    });
+    
+    // Clear notes textarea
+    document.querySelector('textarea[name="notes"]').value = '';
+    
     document.getElementById('summaryContent').textContent = summaryText;
     document.getElementById('summaryModal').style.display = 'flex';
 }
-
 function copySummary() {
     const summaryText = document.getElementById('summaryContent').textContent;
     navigator.clipboard.writeText(summaryText).then(() => {
