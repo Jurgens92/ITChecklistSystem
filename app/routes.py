@@ -353,93 +353,117 @@ def export_user_report(user_id):
         flash("Access denied")
         return redirect(url_for("main.dashboard"))
 
-    user = User.query.get_or_404(user_id)
-    records = ChecklistRecord.query.filter_by(user_id=user_id)\
-        .order_by(ChecklistRecord.date_performed.desc())\
-        .all()
+    try:
+        user = User.query.get_or_404(user_id)
+        records = ChecklistRecord.query.filter_by(user_id=user_id)\
+            .order_by(ChecklistRecord.date_performed.desc())\
+            .all()
 
-    buffer = BytesIO()
-    doc = SimpleDocTemplate(
-        buffer,
-        pagesize=letter,
-        rightMargin=36,
-        leftMargin=36,
-        topMargin=36,
-        bottomMargin=36
-    )
+        # Create PDF
+        buffer = BytesIO()
+        doc = SimpleDocTemplate(
+            buffer,
+            pagesize=letter,
+            rightMargin=36,
+            leftMargin=36,
+            topMargin=36,
+            bottomMargin=36
+        )
 
-    elements = []
-    styles = getSampleStyleSheet()
-    
-    # Add title
-    elements.append(Paragraph(f"User Report - {user.username}", styles['Heading1']))
-    elements.append(Spacer(1, 20))
-    
-    # Add report date
-    report_date = datetime.now().strftime("%Y-%m-%d %H:%M")
-    elements.append(Paragraph(f"Generated: {report_date}", styles['Normal']))
-    elements.append(Spacer(1, 20))
-
-    # Prepare table data
-    table_data = [['Date', 'Client', 'Category', 'Item', 'Status']]
-    
-    for record in records:
-        completed_items = CompletedItem.query.filter_by(record_id=record.id).all()
+        elements = []
+        styles = getSampleStyleSheet()
         
-        for completed_item in completed_items:
-            checklist_item = ChecklistItem.query.get(completed_item.checklist_item_id)
-            if checklist_item:
-                category = ChecklistCategory.query.get(checklist_item.category_id)
-                category_name = category.name if category else "No Category"
-                
-                table_data.append([
-                    record.date_performed.strftime('%Y-%m-%d %H:%M'),
-                    record.client.name,
-                    category_name,
-                    Paragraph(checklist_item.description, styles['Normal']),
-                    'Completed' if completed_item.completed else 'Not Completed'
-                ])
+        # Add title
+        title = f"User Report - {user.username}"
+        elements.append(Paragraph(title, styles['Heading1']))
+        elements.append(Spacer(1, 20))
+        
+        # Add report generation date
+        report_date = datetime.now().strftime("%Y-%m-%d %H:%M")
+        elements.append(Paragraph(f"Generated: {report_date}", styles['Normal']))
+        elements.append(Spacer(1, 20))
 
-    if len(table_data) > 1:
-        # Calculate column widths
-        page_width = letter[0] - 72
-        col_widths = [
-            page_width * 0.15,  # Date
-            page_width * 0.20,  # Client
-            page_width * 0.15,  # Category
-            page_width * 0.35,  # Item
-            page_width * 0.15   # Status
-        ]
+        # Prepare table data
+        table_data = [['Date', 'Client', 'Category', 'Item', 'Status']]
+        
+        for record in records:
+            # Get completed items for this record
+            completed_items = CompletedItem.query.filter_by(record_id=record.id).all()
+            
+            # Get notes for this record
+            notes = ChecklistNotes.query.filter_by(checklist_record_id=record.id).first()
+            
+            # Add items
+            for completed_item in completed_items:
+                checklist_item = ChecklistItem.query.get(completed_item.checklist_item_id)
+                if checklist_item:
+                    category = ChecklistCategory.query.get(checklist_item.category_id)
+                    category_name = category.name if category else "No Category"
+                    
+                    table_data.append([
+                        record.date_performed.strftime('%Y-%m-%d %H:%M'),
+                        record.client.name,
+                        category_name,
+                        Paragraph(checklist_item.description, styles['Normal']),
+                        'Completed' if completed_item.completed else 'Not Completed'
+                    ])
+            
+            # If there are notes, add them after the items
+            if notes and notes.note_text:
+                table_data.append(['', '', '', '', ''])  # Empty row for spacing
+                note_header = f"Notes ({record.date_performed.strftime('%Y-%m-%d %H:%M')}):"
+                table_data.append([Paragraph(note_header, styles['Heading4']), '', '', '', ''])
+                table_data.append([Paragraph(notes.note_text, styles['Normal']), '', '', '', ''])
+                table_data.append(['', '', '', '', ''])  # Empty row for spacing
 
-        table = Table(table_data, colWidths=col_widths, repeatRows=1)
-        table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 12),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-            ('BACKGROUND', (0, 1), (-1, -1), colors.white),
-            ('TEXTCOLOR', (0, 1), (-1, -1), colors.black),
-            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-            ('FONTSIZE', (0, 1), (-1, -1), 10),
-            ('GRID', (0, 0), (-1, -1), 1, colors.black),
-            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.lightgrey]),
-            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-        ]))
-        elements.append(table)
-    else:
-        elements.append(Paragraph("No records found for this user", styles['Normal']))
+        if len(table_data) > 1:
+            # Calculate column widths
+            page_width = letter[0] - 72
+            col_widths = [
+                page_width * 0.15,  # Date
+                page_width * 0.15,  # Client
+                page_width * 0.15,  # Category
+                page_width * 0.40,  # Item
+                page_width * 0.15   # Status
+            ]
 
-    doc.build(elements)
-    buffer.seek(0)
-    
-    return send_file(
-        buffer,
-        mimetype='application/pdf',
-        as_attachment=True,
-        download_name=f'{user.username}_report.pdf'
-    )
+            table = Table(table_data, colWidths=col_widths, repeatRows=1)
+            table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 12),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                ('BACKGROUND', (0, 1), (-1, -1), colors.white),
+                ('TEXTCOLOR', (0, 1), (-1, -1), colors.black),
+                ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+                ('FONTSIZE', (0, 1), (-1, -1), 10),
+                ('GRID', (0, 0), (-1, 0), 1, colors.black),
+                ('LINEBELOW', (0, 0), (-1, -1), 0.25, colors.grey),
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ('SPAN', (0, -1), (-1, -1)),
+            ]))
+            elements.append(table)
+        else:
+            elements.append(Paragraph("No records found for this user", styles['Normal']))
+
+        doc.build(elements)
+        buffer.seek(0)
+        
+        filename = f"{user.username}_report.pdf"
+        
+        return send_file(
+            buffer,
+            mimetype='application/pdf',
+            as_attachment=True,
+            download_name=filename
+        )
+
+    except Exception as e:
+        current_app.logger.error(f"Error generating PDF report: {str(e)}")
+        flash("Error generating PDF report")
+        return redirect(url_for('main.user_report', user_id=user_id))
 
 @main.route("/export-client-report/<int:client_id>")
 @login_required
@@ -504,7 +528,7 @@ def export_client_report(client_id):
         elements.append(Spacer(1, 20))
 
         # Prepare table data
-        table_data = [['Date', 'Performed By', 'Category', 'Item', 'Status', 'Notes']]
+        table_data = [['Date', 'Performed By', 'Category', 'Item', 'Status']]
         
         for record in records:
             # Get completed items for this record
@@ -512,8 +536,8 @@ def export_client_report(client_id):
             
             # Get notes for this record
             notes = ChecklistNotes.query.filter_by(checklist_record_id=record.id).first()
-            notes_text = notes.note_text if notes else ""
             
+            # Add items
             for completed_item in completed_items:
                 checklist_item = ChecklistItem.query.get(completed_item.checklist_item_id)
                 if checklist_item:
@@ -525,20 +549,26 @@ def export_client_report(client_id):
                         record.user.username,
                         category_name,
                         Paragraph(checklist_item.description, styles['Normal']),
-                        'Completed' if completed_item.completed else 'Not Completed',
-                        Paragraph(notes_text, styles['Normal']) if notes_text else ""
+                        'Completed' if completed_item.completed else 'Not Completed'
                     ])
+            
+            # If there are notes, add them after the items
+            if notes and notes.note_text:
+                table_data.append(['', '', '', '', ''])  # Empty row for spacing
+                note_header = f"Notes ({record.date_performed.strftime('%Y-%m-%d %H:%M')}):"
+                table_data.append([Paragraph(note_header, styles['Heading4']), '', '', '', ''])
+                table_data.append([Paragraph(notes.note_text, styles['Normal']), '', '', '', ''])
+                table_data.append(['', '', '', '', ''])  # Empty row for spacing
 
         if len(table_data) > 1:
             # Calculate column widths
             page_width = letter[0] - 72
             col_widths = [
                 page_width * 0.15,  # Date
-                page_width * 0.12,  # Performed by
-                page_width * 0.13,  # Category
-                page_width * 0.25,  # Item
-                page_width * 0.10,  # Status
-                page_width * 0.25   # Notes
+                page_width * 0.15,  # Performed by
+                page_width * 0.15,  # Category
+                page_width * 0.40,  # Item
+                page_width * 0.15   # Status
             ]
 
             table = Table(table_data, colWidths=col_widths, repeatRows=1)
@@ -553,10 +583,10 @@ def export_client_report(client_id):
                 ('TEXTCOLOR', (0, 1), (-1, -1), colors.black),
                 ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
                 ('FONTSIZE', (0, 1), (-1, -1), 10),
-                ('GRID', (0, 0), (-1, -1), 1, colors.black),
-                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.lightgrey]),
+                ('GRID', (0, 0), (-1, 0), 1, colors.black),
+                ('LINEBELOW', (0, 0), (-1, -1), 0.25, colors.grey),
                 ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-                ('WORDWRAP', (0, 0), (-1, -1), True)
+                ('SPAN', (0, -1), (-1, -1)),
             ]))
             elements.append(table)
         else:
