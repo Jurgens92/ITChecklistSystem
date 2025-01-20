@@ -226,32 +226,11 @@ def reports():
         flash("Access denied. Admin privileges required.")
         return redirect(url_for("main.dashboard"))
 
-    # Get all clients and users for the dropdowns
     clients = Client.query.all()
     users = User.query.all()
 
     return render_template("reports.html", clients=clients, users=users)
 
-
-@main.route("/reports/client/<int:client_id>")
-@login_required
-def client_report(client_id):
-    if not current_user.is_admin:
-        flash("Access denied")
-        return redirect(url_for("main.dashboard"))
-
-    client = Client.query.get_or_404(client_id)
-    
-    # Get records without finalized filter
-    records = ChecklistRecord.query.filter_by(client_id=client_id)\
-        .order_by(ChecklistRecord.date_performed.desc())\
-        .all()
-    
-    return render_template(
-        "client_report.html", 
-        client=client, 
-        records=records
-    )
 
 @main.route("/reports/user/<int:user_id>")
 @login_required
@@ -318,17 +297,64 @@ def summary_report():
         active_users=active_users,
     )
 
-@main.route("/export-client-report/<int:client_id>")
+@main.route("/client-report/<int:client_id>")
 @login_required
-def export_client_report(client_id):
+def client_report(client_id):
     if not current_user.is_admin:
         flash("Access denied")
         return redirect(url_for("main.dashboard"))
 
-    client = Client.query.get_or_404(client_id)
-    
-    # Get records without pagination
-    records = ChecklistRecord.query.filter_by(client_id=client_id)\
+    try:
+        client = Client.query.get_or_404(client_id)
+        
+        # Get date range filters
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        
+        # Base query
+        query = ChecklistRecord.query.filter_by(client_id=client_id)
+        
+        # Apply date filters if provided
+        if start_date:
+            try:
+                start = datetime.strptime(start_date, '%Y-%m-%d')
+                query = query.filter(ChecklistRecord.date_performed >= start)
+            except ValueError:
+                flash("Invalid start date format")
+        
+        if end_date:
+            try:
+                # Add one day to include the end date fully
+                end = datetime.strptime(end_date, '%Y-%m-%d') + timedelta(days=1)
+                query = query.filter(ChecklistRecord.date_performed < end)
+            except ValueError:
+                flash("Invalid end date format")
+        
+        # Get records with filters and count completed items
+        records = query.order_by(ChecklistRecord.date_performed.desc()).all()
+        
+        return render_template(
+            "client_report.html",
+            client=client,
+            records=records,
+            start_date=start_date,
+            end_date=end_date
+        )
+        
+    except Exception as e:
+        current_app.logger.error(f"Error generating client report: {str(e)}")
+        flash("Error generating report")
+        return redirect(url_for("main.reports"))
+
+@main.route("/export-user-report/<int:user_id>")
+@login_required
+def export_user_report(user_id):
+    if not current_user.is_admin:
+        flash("Access denied")
+        return redirect(url_for("main.dashboard"))
+
+    user = User.query.get_or_404(user_id)
+    records = ChecklistRecord.query.filter_by(user_id=user_id)\
         .order_by(ChecklistRecord.date_performed.desc())\
         .all()
 
@@ -346,7 +372,7 @@ def export_client_report(client_id):
     styles = getSampleStyleSheet()
     
     # Add title
-    elements.append(Paragraph(f"Checklist Report - {client.name}", styles['Heading1']))
+    elements.append(Paragraph(f"User Report - {user.username}", styles['Heading1']))
     elements.append(Spacer(1, 20))
     
     # Add report date
@@ -355,17 +381,12 @@ def export_client_report(client_id):
     elements.append(Spacer(1, 20))
 
     # Prepare table data
-    table_data = [['Date', 'Performed By', 'Category', 'Item', 'Status']]
+    table_data = [['Date', 'Client', 'Category', 'Item', 'Status']]
     
     for record in records:
-        # Get all completed items for this record
         completed_items = CompletedItem.query.filter_by(record_id=record.id).all()
         
-        # Get notes for this record
-        notes = ChecklistNotes.query.filter_by(checklist_record_id=record.id).first()
-        
         for completed_item in completed_items:
-            # Get the checklist item details
             checklist_item = ChecklistItem.query.get(completed_item.checklist_item_id)
             if checklist_item:
                 category = ChecklistCategory.query.get(checklist_item.category_id)
@@ -373,35 +394,20 @@ def export_client_report(client_id):
                 
                 table_data.append([
                     record.date_performed.strftime('%Y-%m-%d %H:%M'),
-                    record.user.username,
+                    record.client.name,
                     category_name,
                     Paragraph(checklist_item.description, styles['Normal']),
                     'Completed' if completed_item.completed else 'Not Completed'
                 ])
-        
-        # Add notes if they exist
-        if notes:
-            # Add a spacer row
-            table_data.append(['', '', '', '', ''])
-            # Add the notes row
-            table_data.append([
-                record.date_performed.strftime('%Y-%m-%d %H:%M'),
-                record.user.username,
-                'Notes',
-                Paragraph(notes.note_text, styles['Normal']),
-                ''
-            ])
-            # Add another spacer row
-            table_data.append(['', '', '', '', ''])
 
     if len(table_data) > 1:
         # Calculate column widths
         page_width = letter[0] - 72
         col_widths = [
             page_width * 0.15,  # Date
-            page_width * 0.15,  # Performed by
+            page_width * 0.20,  # Client
             page_width * 0.15,  # Category
-            page_width * 0.40,  # Item
+            page_width * 0.35,  # Item
             page_width * 0.15   # Status
         ]
 
@@ -420,11 +426,10 @@ def export_client_report(client_id):
             ('GRID', (0, 0), (-1, -1), 1, colors.black),
             ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.lightgrey]),
             ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-            ('WORDWRAP', (0, 0), (-1, -1), True)
         ]))
         elements.append(table)
     else:
-        elements.append(Paragraph("No records found for this client", styles['Normal']))
+        elements.append(Paragraph("No records found for this user", styles['Normal']))
 
     doc.build(elements)
     buffer.seek(0)
@@ -433,8 +438,150 @@ def export_client_report(client_id):
         buffer,
         mimetype='application/pdf',
         as_attachment=True,
-        download_name=f'{client.name}_checklist_report.pdf'
+        download_name=f'{user.username}_report.pdf'
     )
+
+@main.route("/export-client-report/<int:client_id>")
+@login_required
+def export_client_report(client_id):
+    if not current_user.is_admin:
+        flash("Access denied")
+        return redirect(url_for("main.dashboard"))
+
+    try:
+        client = Client.query.get_or_404(client_id)
+        
+        # Get date range filters
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        
+        # Base query
+        query = ChecklistRecord.query.filter_by(client_id=client_id)
+        
+        # Apply date filters if provided
+        if start_date:
+            try:
+                start = datetime.strptime(start_date, '%Y-%m-%d')
+                query = query.filter(ChecklistRecord.date_performed >= start)
+            except ValueError:
+                flash("Invalid start date format")
+                return redirect(url_for('main.client_report', client_id=client_id))
+        
+        if end_date:
+            try:
+                end = datetime.strptime(end_date, '%Y-%m-%d') + timedelta(days=1)
+                query = query.filter(ChecklistRecord.date_performed < end)
+            except ValueError:
+                flash("Invalid end date format")
+                return redirect(url_for('main.client_report', client_id=client_id))
+        
+        records = query.order_by(ChecklistRecord.date_performed.desc()).all()
+
+        # Create PDF
+        buffer = BytesIO()
+        doc = SimpleDocTemplate(
+            buffer,
+            pagesize=letter,
+            rightMargin=36,
+            leftMargin=36,
+            topMargin=36,
+            bottomMargin=36
+        )
+
+        elements = []
+        styles = getSampleStyleSheet()
+        
+        # Add title with date range if specified
+        title = f"Checklist Report - {client.name}"
+        if start_date and end_date:
+            title += f" ({start_date} to {end_date})"
+        elements.append(Paragraph(title, styles['Heading1']))
+        elements.append(Spacer(1, 20))
+        
+        # Add report generation date
+        report_date = datetime.now().strftime("%Y-%m-%d %H:%M")
+        elements.append(Paragraph(f"Generated: {report_date}", styles['Normal']))
+        elements.append(Spacer(1, 20))
+
+        # Prepare table data
+        table_data = [['Date', 'Performed By', 'Category', 'Item', 'Status', 'Notes']]
+        
+        for record in records:
+            # Get completed items for this record
+            completed_items = CompletedItem.query.filter_by(record_id=record.id).all()
+            
+            # Get notes for this record
+            notes = ChecklistNotes.query.filter_by(checklist_record_id=record.id).first()
+            notes_text = notes.note_text if notes else ""
+            
+            for completed_item in completed_items:
+                checklist_item = ChecklistItem.query.get(completed_item.checklist_item_id)
+                if checklist_item:
+                    category = ChecklistCategory.query.get(checklist_item.category_id)
+                    category_name = category.name if category else "No Category"
+                    
+                    table_data.append([
+                        record.date_performed.strftime('%Y-%m-%d %H:%M'),
+                        record.user.username,
+                        category_name,
+                        Paragraph(checklist_item.description, styles['Normal']),
+                        'Completed' if completed_item.completed else 'Not Completed',
+                        Paragraph(notes_text, styles['Normal']) if notes_text else ""
+                    ])
+
+        if len(table_data) > 1:
+            # Calculate column widths
+            page_width = letter[0] - 72
+            col_widths = [
+                page_width * 0.15,  # Date
+                page_width * 0.12,  # Performed by
+                page_width * 0.13,  # Category
+                page_width * 0.25,  # Item
+                page_width * 0.10,  # Status
+                page_width * 0.25   # Notes
+            ]
+
+            table = Table(table_data, colWidths=col_widths, repeatRows=1)
+            table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 12),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                ('BACKGROUND', (0, 1), (-1, -1), colors.white),
+                ('TEXTCOLOR', (0, 1), (-1, -1), colors.black),
+                ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+                ('FONTSIZE', (0, 1), (-1, -1), 10),
+                ('GRID', (0, 0), (-1, -1), 1, colors.black),
+                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.lightgrey]),
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ('WORDWRAP', (0, 0), (-1, -1), True)
+            ]))
+            elements.append(table)
+        else:
+            elements.append(Paragraph("No records found for this client", styles['Normal']))
+
+        doc.build(elements)
+        buffer.seek(0)
+        
+        # Generate filename with date range if specified
+        filename = f"{client.name}_checklist_report"
+        if start_date and end_date:
+            filename += f"_{start_date}_to_{end_date}"
+        filename += ".pdf"
+        
+        return send_file(
+            buffer,
+            mimetype='application/pdf',
+            as_attachment=True,
+            download_name=filename
+        )
+
+    except Exception as e:
+        current_app.logger.error(f"Error generating PDF report: {str(e)}")
+        flash("Error generating PDF report")
+        return redirect(url_for('main.client_report', client_id=client_id))
 
 @main.route("/manage-clients")
 @login_required
