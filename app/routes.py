@@ -565,6 +565,37 @@ def toggle_client(client_id):
     flash(f"Client {client.name} has been {status}.")
     return redirect(url_for("main.manage_clients"))
 
+@main.route("/remove-client-category/<int:client_id>/<int:category_id>", methods=["POST"])
+@login_required
+def remove_client_category(client_id, category_id):
+    if not current_user.is_admin:
+        return jsonify({"status": "error", "message": "Access denied"}), 403
+
+    try:
+        # Delete all items in this category for this client
+        ChecklistItem.query.filter_by(
+            client_id=client_id,
+            category_id=category_id
+        ).delete()
+
+        # If this is a custom category (associated with this client), delete it
+        category = ChecklistCategory.query.filter_by(
+            id=category_id,
+            client_id=client_id
+        ).first()
+        
+        if category:
+            db.session.delete(category)
+
+        db.session.commit()
+        return jsonify({"status": "success"})
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            "status": "error",
+            "message": str(e)
+        }), 500
 
 @main.route("/manage-users")
 @login_required
@@ -823,12 +854,31 @@ def edit_client_structure(client_id):
     if request.method == "POST":
         try:
             data = request.get_json()
-            print(f"Received data: {data}")  # Debug log
             
             if not data:
                 return jsonify({"status": "error", "message": "No data provided"}), 400
             
-            # Clear existing items for this client
+            # Check for duplicates across all categories
+            all_items = []
+            for category_data in data.get('categories', []):
+                category_id = category_data.get('id')
+                items = category_data.get('items', [])
+                
+                # Create a list of lowercase descriptions for case-insensitive comparison
+                category_items = [item['description'].lower().strip() for item in items if 'description' in item]
+                
+                # Check for duplicates within the category
+                duplicates = [item for item in category_items if category_items.count(item) > 1]
+                if duplicates:
+                    category = ChecklistCategory.query.get(category_id)
+                    return jsonify({
+                        "status": "error",
+                        "message": f"Duplicate items found in category {category.name}: {', '.join(set(duplicates))}"
+                    }), 400
+                
+                all_items.extend(category_items)
+            
+            # Delete existing items for this client
             ChecklistItem.query.filter_by(client_id=client_id).delete()
             
             # Add new/updated items
@@ -840,10 +890,10 @@ def edit_client_structure(client_id):
                 
                 if category_id and items:
                     for item in items:
-                        if 'description' in item:
+                        if 'description' in item and item['description'].strip():
                             new_item = ChecklistItem(
                                 client_id=client_id,
-                                description=item['description'],
+                                description=item['description'].strip(),
                                 category_id=category_id
                             )
                             db.session.add(new_item)
@@ -856,11 +906,27 @@ def edit_client_structure(client_id):
             print(f"Error in edit_client_structure: {str(e)}")  # Debug log
             return jsonify({"status": "error", "message": str(e)}), 500
     
-    # GET request - display edit form
+    # GET request handling
     items_by_category = {}
-    categories = ChecklistCategory.query.filter(
-        (ChecklistCategory.template_id != None) |
-        (ChecklistCategory.client_id == client_id)
+    
+    # Get categories that either:
+    # 1. Have items for this client
+    # 2. Are custom categories for this client
+    # 3. Are template categories with items
+    categories = db.session.query(ChecklistCategory).distinct().join(
+        ChecklistItem,
+        (ChecklistItem.category_id == ChecklistCategory.id) & 
+        (ChecklistItem.client_id == client_id),
+        isouter=True
+    ).filter(
+        db.or_(
+            ChecklistItem.client_id == client_id,
+            ChecklistCategory.client_id == client_id,
+            db.and_(
+                ChecklistCategory.template_id.isnot(None),
+                ChecklistItem.id.isnot(None)
+            )
+        )
     ).all()
     
     for category in categories:
@@ -868,7 +934,9 @@ def edit_client_structure(client_id):
             client_id=client_id,
             category_id=category.id
         ).all()
-        if items:
+        
+        # Only include categories that have items or are custom to this client
+        if items or category.client_id == client_id:
             items_by_category[category] = items
     
     return render_template(

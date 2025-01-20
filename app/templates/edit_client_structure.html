@@ -87,7 +87,30 @@ function addCategory() {
 }
 
 function removeCategory(button) {
-    button.closest('.category-section').remove();
+    const categorySection = button.closest('.category-section');
+    const categoryId = categorySection.dataset.categoryId;
+    const clientId = {{ client.id }};  // This will be rendered with the actual client ID
+
+    if (confirm('Are you sure you want to remove this category and all its items?')) {
+        fetch(`/remove-client-category/${clientId}/${categoryId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                categorySection.remove();
+            } else {
+                alert('Error removing category: ' + (data.message || 'Unknown error'));
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error removing category. Please try again.');
+        });
+    }
 }
 
 function addCustomCategory() {
@@ -136,30 +159,47 @@ function addCustomCategory() {
     });
 }
 
+function findDuplicates(items) {
+    const descriptions = items.map(item => item.description.toLowerCase().trim());
+    const duplicates = descriptions.filter((item, index) => descriptions.indexOf(item) !== index);
+    return [...new Set(duplicates)];
+}
+
 function saveChanges() {
     const categories = [];
+    let hasDuplicates = false;
+    let duplicateMessages = [];
+
     document.querySelectorAll('.category-section').forEach(categorySection => {
         const categoryId = categorySection.dataset.categoryId;
+        const categoryName = categorySection.querySelector('h3').textContent;
         const items = [];
         
-        categorySection.querySelectorAll('.checklist-item input').forEach(input => {
-            if (input.value.trim()) {
-                items.push({
-                    description: input.value.trim()
-                });
-            }
-        });
+        const categoryItems = Array.from(categorySection.querySelectorAll('.checklist-item input')).map(input => ({
+            description: input.value.trim()
+        })).filter(item => item.description); // Filter out empty items
         
-        if (items.length > 0) {  // Only include categories that have items
+        // Check for duplicates within this category
+        const duplicates = findDuplicates(categoryItems);
+        if (duplicates.length > 0) {
+            hasDuplicates = true;
+            duplicateMessages.push(`Duplicate items found in ${categoryName}: ${duplicates.join(', ')}`);
+        }
+        
+        if (categoryItems.length > 0) {
             categories.push({
                 id: parseInt(categoryId),
-                items: items
+                items: categoryItems
             });
         }
     });
     
-    console.log('Sending categories:', categories);  // Debug log
+    if (hasDuplicates) {
+        alert('Please remove duplicate items:\n\n' + duplicateMessages.join('\n'));
+        return;
+    }
     
+    // Proceed with saving if no duplicates found
     fetch("{{ url_for('main.edit_client_structure', client_id=client.id) }}", {
         method: 'POST',
         headers: {
@@ -169,25 +209,17 @@ function saveChanges() {
             categories: categories
         })
     })
-    .then(response => {
-        if (!response.ok) {
-            return response.json().then(data => {
-                throw new Error(data.message || 'Network response was not ok');
-            });
-        }
-        return response.json();
-    })
+    .then(response => response.json())
     .then(data => {
         if (data.status === 'success') {
             window.location.href = "{{ url_for('main.client_checklist', client_id=client.id) }}";
         } else {
-            console.error('Error response:', data);  // Debug log
             alert('Error saving changes: ' + (data.message || 'Unknown error'));
         }
     })
     .catch(error => {
-        console.error('Error:', error);  // Debug log
-        alert('Error saving changes. Please try again. Details: ' + error.message);
+        console.error('Error:', error);
+        alert('Error saving changes. Please try again.');
     });
 }
 </script>
