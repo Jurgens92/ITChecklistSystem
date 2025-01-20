@@ -94,3 +94,12 @@ class ClientChecklist(db.Model):
     description = db.Column(db.String(200), nullable=False)
     category = db.Column(db.String(50))
 
+class Settings(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    timezone = db.Column(db.String(50), default='UTC')
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    @staticmethod
+    def get_timezone():
+        settings = Settings.query.first()
+        return settings.timezone if settings else 'UTC'

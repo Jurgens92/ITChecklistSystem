@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="settings-container">
+    <h1>System Settings</h1>
+
+    <div class="settings-section">
+        <h2>Timezone Configuration</h2>
+        <form method="POST" class="settings-form">
+            <div class="form-group">
+                <label for="timezone">Select Timezone:</label>
+                <select name="timezone" id="timezone" class="form-control">
+                    {% for tz in available_timezones %}
+                    <option value="{{ tz }}" {% if tz == current_timezone %}selected{% endif %}>
+                        {{ tz }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-actions">
+                <button type="submit" class="button">Save Settings</button>
+                <a href="{{ url_for('main.dashboard') }}" class="button secondary">Back to Dashboard</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<style>
+.settings-container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+.settings-section {
+    background: white;
+    padding: 20px;
+    border-radius: 5px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    margin-bottom: 20px;
+}
+
+.settings-form {
+    margin-top: 20px;
+}
+
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: bold;
+}
+
+.form-control {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
+.form-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+}
+</style>
+{% endblock %}

@@ -11,7 +11,9 @@ from app.models import (
     TemplateItem,
     ChecklistCategory,
     ChecklistNotes,
+    Settings,
 )
+import pytz
 from app import db
 from sqlalchemy import func, text
 from datetime import datetime, timedelta
@@ -24,6 +26,27 @@ from reportlab.lib.units import inch
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
 from reportlab.lib.enums import TA_LEFT, TA_CENTER
 
+
+def get_local_time():
+    settings = Settings.query.first()
+    tz = pytz.timezone(settings.timezone if settings else 'UTC')
+    return datetime.now(tz)
+
+def convert_to_local_time(utc_dt):
+    if not utc_dt:
+        return None
+    
+    settings = Settings.query.first()
+    local_tz = pytz.timezone(settings.timezone if settings else 'UTC')
+    
+    # If the datetime is naive (has no timezone info), assume it's UTC
+    if utc_dt.tzinfo is None:
+        utc_dt = pytz.UTC.localize(utc_dt)
+    
+    return utc_dt.astimezone(local_tz)
+
+
+
 main = Blueprint("main", __name__)
 
 @main.route("/")
@@ -33,6 +56,41 @@ def dashboard():
     clients = Client.query.filter_by(is_active=True).all()
     return render_template("dashboard.html", clients=clients)
 
+@main.route("/settings", methods=["GET", "POST"])
+@login_required
+def settings():
+    if not current_user.is_admin:
+        flash("Access denied")
+        return redirect(url_for("main.dashboard"))
+
+    if request.method == "POST":
+        new_timezone = request.form.get("timezone")
+        try:
+            # Validate timezone
+            pytz.timezone(new_timezone)
+            
+            settings = Settings.query.first()
+            if not settings:
+                settings = Settings(timezone=new_timezone)
+                db.session.add(settings)
+            else:
+                settings.timezone = new_timezone
+                settings.updated_at = datetime.utcnow()
+            
+            db.session.commit()
+            flash("Timezone settings updated successfully")
+        except Exception as e:
+            flash(f"Invalid timezone: {str(e)}")
+        
+        return redirect(url_for("main.settings"))
+
+    settings = Settings.query.first()
+    timezones = pytz.all_timezones
+    return render_template(
+        "settings.html",
+        current_timezone=settings.timezone if settings else 'UTC',
+        available_timezones=timezones
+    )
 
 @main.route("/login", methods=["GET", "POST"])
 def login():
@@ -126,7 +184,7 @@ def submit_checklist():
             record = ChecklistRecord(
                 client_id=client_id,
                 user_id=current_user.id,
-                date_performed=datetime.utcnow()
+                date_performed=get_local_time()
             )
             db.session.add(record)
             db.session.flush()  # Get the record ID
@@ -272,7 +330,8 @@ def user_report(user_id):
         user=user,
         records=records,
         start_date=start_date,
-        end_date=end_date
+        end_date=end_date,
+        convert_to_local_time=convert_to_local_time
     )
 
 @main.route("/reports/summary")
@@ -364,7 +423,8 @@ def client_report(client_id):
             client=client,
             records=records,
             start_date=start_date,
-            end_date=end_date
+            end_date=end_date,
+            convert_to_local_time=convert_to_local_time
         )
         
     except Exception as e:
@@ -1244,6 +1304,7 @@ def checklist_detail(record_id):
     return render_template(
         'checklist_detail.html',
         record=record,
+        convert_to_local_time=convert_to_local_time,
         items_by_category=items_by_category,
         notes=notes
     )
