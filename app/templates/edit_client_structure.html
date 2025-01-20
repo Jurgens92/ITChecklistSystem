@@ -150,11 +150,15 @@ function saveChanges() {
             }
         });
         
-        categories.push({
-            id: parseInt(categoryId),
-            items: items
-        });
+        if (items.length > 0) {  // Only include categories that have items
+            categories.push({
+                id: parseInt(categoryId),
+                items: items
+            });
+        }
     });
+    
+    console.log('Sending categories:', categories);  // Debug log
     
     fetch("{{ url_for('main.edit_client_structure', client_id=client.id) }}", {
         method: 'POST',
@@ -165,17 +169,25 @@ function saveChanges() {
             categories: categories
         })
     })
-    .then(response => response.json())
+    .then(response => {
+        if (!response.ok) {
+            return response.json().then(data => {
+                throw new Error(data.message || 'Network response was not ok');
+            });
+        }
+        return response.json();
+    })
     .then(data => {
         if (data.status === 'success') {
             window.location.href = "{{ url_for('main.client_checklist', client_id=client.id) }}";
         } else {
+            console.error('Error response:', data);  // Debug log
             alert('Error saving changes: ' + (data.message || 'Unknown error'));
         }
     })
     .catch(error => {
-        console.error('Error:', error);
-        alert('Error saving changes. Please try again.');
+        console.error('Error:', error);  // Debug log
+        alert('Error saving changes. Please try again. Details: ' + error.message);
     });
 }
 </script>

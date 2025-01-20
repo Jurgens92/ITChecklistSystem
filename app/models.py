@@ -79,6 +79,7 @@ class ChecklistCategory(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(50), nullable=False)
     template_id = db.Column(db.Integer, db.ForeignKey('checklist_template.id'))
+    client_id = db.Column(db.Integer, db.ForeignKey('client.id'))
     items = db.relationship('TemplateItem', backref='category', cascade='all, delete-orphan')
     
 class TemplateItem(db.Model):

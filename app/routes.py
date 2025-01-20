@@ -823,34 +823,45 @@ def edit_client_structure(client_id):
     if request.method == "POST":
         try:
             data = request.get_json()
+            print(f"Received data: {data}")  # Debug log
+            
+            if not data:
+                return jsonify({"status": "error", "message": "No data provided"}), 400
             
             # Clear existing items for this client
             ChecklistItem.query.filter_by(client_id=client_id).delete()
             
             # Add new/updated items
-            for category_data in data['categories']:
-                category_id = category_data['id']
-                items = category_data['items']
+            for category_data in data.get('categories', []):
+                category_id = category_data.get('id')
+                items = category_data.get('items', [])
                 
-                for item in items:
-                    new_item = ChecklistItem(
-                        client_id=client_id,
-                        description=item['description'],
-                        category_id=category_id,
-                        completed=False
-                    )
-                    db.session.add(new_item)
+                print(f"Processing category {category_id} with {len(items)} items")  # Debug log
+                
+                if category_id and items:
+                    for item in items:
+                        if 'description' in item:
+                            new_item = ChecklistItem(
+                                client_id=client_id,
+                                description=item['description'],
+                                category_id=category_id
+                            )
+                            db.session.add(new_item)
             
             db.session.commit()
             return jsonify({"status": "success"})
             
         except Exception as e:
             db.session.rollback()
+            print(f"Error in edit_client_structure: {str(e)}")  # Debug log
             return jsonify({"status": "error", "message": str(e)}), 500
     
     # GET request - display edit form
     items_by_category = {}
-    categories = ChecklistCategory.query.all()
+    categories = ChecklistCategory.query.filter(
+        (ChecklistCategory.template_id != None) |
+        (ChecklistCategory.client_id == client_id)
+    ).all()
     
     for category in categories:
         items = ChecklistItem.query.filter_by(
@@ -880,17 +891,10 @@ def add_custom_category(client_id):
         return jsonify({'error': 'Category name is required'}), 400
         
     try:
-        # Find or create a default template
-        default_template = ChecklistTemplate.query.filter_by(is_default=True).first()
-        if not default_template:
-            default_template = ChecklistTemplate(name='Default Template', is_default=True)
-            db.session.add(default_template)
-            db.session.flush()
-
-        # Create new category associated with the template
+        # Create new category associated with the client only
         category = ChecklistCategory(
             name=category_name,
-            template_id=default_template.id
+            client_id=client_id  # Associate with client instead of template
         )
         db.session.add(category)
         db.session.commit()
