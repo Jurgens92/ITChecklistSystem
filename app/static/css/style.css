@@ -264,3 +264,28 @@ nav a:hover {
     border: 1px solid #ddd;
     border-radius: 4px;
 }
+
+.date-filter {
+    background: white;
+    padding: 15px;
+    border-radius: 5px;
+    margin: 15px 0;
+}
+
+.filter-form {
+    display: flex;
+    gap: 15px;
+    align-items: center;
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.form-group input[type="date"] {
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}

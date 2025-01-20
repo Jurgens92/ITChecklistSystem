@@ -240,14 +240,40 @@ def user_report(user_id):
         return redirect(url_for("main.dashboard"))
 
     user = User.query.get_or_404(user_id)
-    records = (
-        ChecklistRecord.query.filter_by(user_id=user_id)
-        .order_by(ChecklistRecord.date_performed.desc())
-        .all()
+    
+    # Get date range filters
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+    
+    # Base query
+    query = ChecklistRecord.query.filter_by(user_id=user_id)
+    
+    # Apply date filters if provided
+    if start_date:
+        try:
+            start = datetime.strptime(start_date, '%Y-%m-%d')
+            query = query.filter(ChecklistRecord.date_performed >= start)
+        except ValueError:
+            flash("Invalid start date format")
+    
+    if end_date:
+        try:
+            # Add one day to include the end date fully
+            end = datetime.strptime(end_date, '%Y-%m-%d') + timedelta(days=1)
+            query = query.filter(ChecklistRecord.date_performed < end)
+        except ValueError:
+            flash("Invalid end date format")
+    
+    # Get records with filters
+    records = query.order_by(ChecklistRecord.date_performed.desc()).all()
+
+    return render_template(
+        "user_report.html",
+        user=user,
+        records=records,
+        start_date=start_date,
+        end_date=end_date
     )
-
-    return render_template("user_report.html", user=user, records=records)
-
 
 @main.route("/reports/summary")
 @login_required
@@ -355,9 +381,33 @@ def export_user_report(user_id):
 
     try:
         user = User.query.get_or_404(user_id)
-        records = ChecklistRecord.query.filter_by(user_id=user_id)\
-            .order_by(ChecklistRecord.date_performed.desc())\
-            .all()
+        
+        # Get date range filters
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        
+        # Base query
+        query = ChecklistRecord.query.filter_by(user_id=user_id)
+        
+        # Apply date filters if provided
+        if start_date:
+            try:
+                start = datetime.strptime(start_date, '%Y-%m-%d')
+                query = query.filter(ChecklistRecord.date_performed >= start)
+            except ValueError:
+                flash("Invalid start date format")
+                return redirect(url_for('main.user_report', user_id=user_id))
+        
+        if end_date:
+            try:
+                # Add one day to include the end date fully
+                end = datetime.strptime(end_date, '%Y-%m-%d') + timedelta(days=1)
+                query = query.filter(ChecklistRecord.date_performed < end)
+            except ValueError:
+                flash("Invalid end date format")
+                return redirect(url_for('main.user_report', user_id=user_id))
+        
+        records = query.order_by(ChecklistRecord.date_performed.desc()).all()
 
         # Create PDF
         buffer = BytesIO()
@@ -373,8 +423,10 @@ def export_user_report(user_id):
         elements = []
         styles = getSampleStyleSheet()
         
-        # Add title
+        # Add title with date range if specified
         title = f"User Report - {user.username}"
+        if start_date and end_date:
+            title += f" ({start_date} to {end_date})"
         elements.append(Paragraph(title, styles['Heading1']))
         elements.append(Spacer(1, 20))
         
@@ -451,7 +503,11 @@ def export_user_report(user_id):
         doc.build(elements)
         buffer.seek(0)
         
-        filename = f"{user.username}_report.pdf"
+        # Generate filename with date range if specified
+        filename = f"{user.username}_report"
+        if start_date and end_date:
+            filename += f"_{start_date}_to_{end_date}"
+        filename += ".pdf"
         
         return send_file(
             buffer,

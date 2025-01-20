@@ -5,9 +5,23 @@
     
     <div class="report-section">
         <h2>Checklist History</h2>
+
+        <div class="date-filter">
+            <form method="GET" class="filter-form">
+                <div class="form-group">
+                    <label for="start_date">Start Date:</label>
+                    <input type="date" id="start_date" name="start_date" value="{{ start_date }}">
+                </div>
+                <div class="form-group">
+                    <label for="end_date">End Date:</label>
+                    <input type="date" id="end_date" name="end_date" value="{{ end_date }}">
+                </div>
+                <button type="submit" class="button">Apply Filter</button>
+            </form>
+        </div>
         
         <div class="button-group">
-            <a href="{{ url_for('main.export_client_report', client_id=client.id) }}" 
+            <a href="{{ url_for('main.export_client_report', client_id=client.id, start_date=start_date, end_date=end_date) }}" 
                class="button export-btn">Export to PDF</a>
             <a href="{{ url_for('main.reports') }}" 
                class="button secondary">Back to Reports</a>
@@ -58,8 +72,35 @@
         margin-bottom: 20px;
     }
 
+    .date-filter {
+        background: white;
+        padding: 15px;
+        border-radius: 5px;
+        margin: 15px 0;
+    }
+
+    .filter-form {
+        display: flex;
+        gap: 15px;
+        align-items: center;
+    }
+
+    .form-group {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+    }
+
+    .form-group input[type="date"] {
+        padding: 8px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+    }
+
     .button-group {
-        margin-bottom: 20px;
+        display: flex;
+        gap: 10px;
+        margin: 20px 0;
     }
 
     .button {
@@ -71,7 +112,6 @@
         text-decoration: none;
         color: white;
         font-size: 14px;
-        margin-right: 10px;
     }
 
     .export-btn {
