@@ -5,9 +5,14 @@
     
     <div class="report-section">
         <h2>Checklist History</h2>
-        <div class="report-actions">
-            <a href="{{ url_for('main.export_client_report', client_id=client.id) }}" class="button export-btn">Export to PDF</a>
+        
+        <div class="button-group">
+            <a href="{{ url_for('main.export_client_report', client_id=client.id) }}" 
+               class="button export-btn">Export to PDF</a>
+            <a href="{{ url_for('main.reports') }}" 
+               class="button secondary">Back to Reports</a>
         </div>
+        
         {% if records %}
         <table class="report-table">
             <thead>
@@ -36,32 +41,71 @@
         <p>No checklist records found for this client.</p>
         {% endif %}
     </div>
-    
-    <div class="report-actions">
-        <a href="{{ url_for('main.reports') }}" class="button secondary">Back to Reports</a>
-    </div>
-
 </div>
 
 <style>
-    .export-btn {
-        background-color: #28a745;
+    .report-container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 20px;
+    }
+
+    .report-section {
+        background: white;
+        padding: 20px;
+        border-radius: 5px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
         margin-bottom: 20px;
     }
-    
-    .export-btn:hover {
-        background-color: #218838;
+
+    .button-group {
+        margin-bottom: 20px;
+    }
+
+    .button {
+        display: inline-block;
+        padding: 10px 20px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        text-decoration: none;
+        color: white;
+        font-size: 14px;
+        margin-right: 10px;
+    }
+
+    .export-btn {
+        background-color: #28a745;
+    }
+
+    .button.secondary {
+        background-color: #6c757d;
+    }
+
+    .report-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .report-table th,
+    .report-table td {
+        padding: 12px;
+        text-align: left;
+        border-bottom: 1px solid #ddd;
+    }
+
+    .report-table th {
+        background-color: #f8f9fa;
+        font-weight: bold;
     }
 
     .items-completed-link {
-    color: #007bff;
-    text-decoration: none;
-    cursor: pointer;
+        color: #007bff;
+        text-decoration: none;
     }
 
     .items-completed-link:hover {
-    text-decoration: underline;
+        text-decoration: underline;
     }
 </style>
-
 {% endblock %}
