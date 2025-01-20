@@ -7,10 +7,17 @@
         <h2>Add New Client</h2>
         <form method="POST" action="{{ url_for('main.add_client') }}" class="add-client-form">
             <div class="form-group">
-                <input type="text" name="client_name" placeholder="Enter client name" required>
-                <select name="template_id" id="template_id" required>
+                <input type="text" 
+                       name="client_name" 
+                       placeholder="Enter client name" 
+                       required 
+                       class="form-control">
+                <select name="template_id" 
+                        id="template_id" 
+                        required 
+                        class="form-control">
                     {% for template in templates %}
-                        <option value="{{ template.id|string }}">{{ template.name }}</option>
+                        <option value="{{ template.id }}">{{ template.name }}</option>
                     {% endfor %}
                 </select>
                 <button type="submit" class="button">Add Client</button>
@@ -102,6 +109,48 @@ function filterClients() {
     </script>
 
 <style>
+
+.add-client-section {
+    background-color: white;
+    padding: 20px;
+    border-radius: 5px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    margin-bottom: 20px;
+}
+
+.add-client-form .form-group {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+}
+
+.add-client-form input,
+.add-client-form select {
+    flex: 1;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    height: 40px;
+}
+
+.add-client-form button {
+    padding: 10px 20px;
+    height: 40px;
+    white-space: nowrap;
+}
+
+@media (max-width: 768px) {
+    .add-client-form .form-group {
+        flex-direction: column;
+    }
+    
+    .add-client-form input,
+    .add-client-form select,
+    .add-client-form button {
+        width: 100%;
+    }
+}
+
 .manage-clients-container {
     max-width: 1000px;
     margin: 0 auto;
