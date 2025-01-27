@@ -11,7 +11,7 @@
         <h2>Select Client</h2>
         <div class="client-search-container">
             <input type="text" id="clientSearch" class="search-input" placeholder="Search clients..." onkeyup="filterClients()">
-            <select id="clientDropdown" class="client-select" size="10">
+            <select id="clientDropdown" class="client-select" size="10" ondblclick="viewSelectedClient()">
                 {% if clients %}
                     {% for client in clients %}
                         <option value="{{ client.id }}">{{ client.name }}</option>
@@ -22,6 +22,7 @@
             </select>
             <button onclick="viewSelectedClient()" class="button">View Checklist</button>
         </div>
+    </div>
 
         {% if current_user.is_admin %}
         <div class="admin-controls">
