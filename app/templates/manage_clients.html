@@ -3,6 +3,7 @@
 <div class="manage-clients-container">
     <h1>Manage Clients</h1>
 
+    {% if current_user.is_admin or current_user.has_permission('add_client') %}
     <div class="add-client-section">
         <h2>Add New Client</h2>
         <form method="POST" action="{{ url_for('main.add_client') }}" class="add-client-form">
@@ -24,6 +25,7 @@
             </div>
         </form>
     </div>
+    {% endif %}
 
     <div class="client-list-section">
         <h2>Client List</h2>

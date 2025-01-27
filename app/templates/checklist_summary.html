@@ -3,11 +3,28 @@
 <div class="summary-container">
     <h1>Checklist Summary</h1>
     
-    <div id="summaryContent" class="summary-content">{% for category, items in summary.summary.items() %}{{ category }}:{% for item in items %}
-- {{ item }}{% endfor %}
-{% endfor %}{% if summary.notes %}
-Notes:
-{{ summary.notes }}{% endif %}</div>
+    <div id="summaryContent" class="summary-content">
+        {% set categories = [] %}
+        {# First collect all category names from the checklist #}
+        {% for category in summary.keys() %}
+            {% set _ = categories.append(category) %}
+        {% endfor %}
+        
+        {# Display categories in order #}
+        {% for category in categories|sort %}
+            {% if summary[category] %}
+            {{ category }}:
+            {% for item in summary[category] %}
+            - {{ item }}
+            {% endfor %}
+            
+            {% endif %}
+        {% endfor %}
+        {% if notes %}
+        Notes:
+        {{ notes }}
+        {% endif %}
+    </div>
 
     <div class="summary-actions">
         <button onclick="copySummary()" class="button">Copy Summary</button>

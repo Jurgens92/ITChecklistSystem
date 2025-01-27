@@ -1,5 +1,6 @@
 from flask import Blueprint, render_template, redirect, url_for, flash, request, jsonify, send_file, session, current_app
 from flask_login import login_user, logout_user, login_required, current_user
+from functools import wraps
 from collections import defaultdict
 from app.models import (
     User,
@@ -12,6 +13,7 @@ from app.models import (
     ChecklistCategory,
     ChecklistNotes,
     Settings,
+    Role
 )
 import pytz
 from app import db
@@ -45,6 +47,17 @@ def convert_to_local_time(utc_dt):
     
     return utc_dt.astimezone(local_tz)
 
+
+def requires_permission(permission):
+    def decorator(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            if not (current_user.is_admin or current_user.has_permission(permission)):
+                flash("Access denied")
+                return redirect(url_for("main.dashboard"))
+            return f(*args, **kwargs)
+        return decorated_function
+    return decorator
 
 
 main = Blueprint("main", __name__)
@@ -121,6 +134,37 @@ def toggle_admin(user_id):
     flash(f"Changed {user.username}'s role to {new_role}")
     return redirect(url_for("main.manage_users"))
 
+@main.route("/assign-role/<int:user_id>", methods=["POST"])
+@login_required
+def assign_role(user_id):
+    if not current_user.is_admin:
+        flash("Access denied")
+        return redirect(url_for("main.dashboard"))
+
+    user = User.query.get_or_404(user_id)
+    role_type = request.form.get('role_type')
+
+    try:
+        if role_type == 'admin':
+            user.is_admin = True
+            user.role = None
+        elif role_type == 'power_user':
+            user.is_admin = False
+            power_user_role = Role.query.filter_by(name='Power User').first()
+            user.role = power_user_role
+        else:  # standard user
+            user.is_admin = False
+            user.role = None
+
+        db.session.commit()
+        flash(f"Role updated for {user.username}")
+
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Error assigning role: {str(e)}")
+
+    return redirect(url_for("main.manage_users"))
+
 @main.route("/logout")
 def logout():
     logout_user()
@@ -134,7 +178,6 @@ def client_checklist(client_id):
     
     # Get all available templates
     templates = ChecklistTemplate.query.all()
-    print(f"DEBUG: Found {len(templates)} templates")  # Debug line
     
     # Get all items for this client
     items_by_category = {}
@@ -149,7 +192,7 @@ def client_checklist(client_id):
         if items:  # Only add categories that have items
             items_by_category[category] = items
 
-    # Print debug information
+    # Debug information
     print(f"DEBUG: Client ID: {client_id}")
     print(f"DEBUG: Number of templates: {len(templates)}")
     for template in templates:
@@ -166,9 +209,6 @@ def client_checklist(client_id):
 @login_required
 def submit_checklist():
     try:
-        # Start transaction
-        db.session.begin_nested()
-        
         client_id = request.form.get("client_id")
         if not client_id:
             raise ValueError("No client specified")
@@ -176,98 +216,83 @@ def submit_checklist():
         completed_item_ids = request.form.getlist("items")
         notes_text = request.form.get("notes", "").strip()
         
-        # Validate client exists
+        # Get client
         client = Client.query.get_or_404(client_id)
         
-        # Create record with proper error handling
-        try:
-            record = ChecklistRecord(
-                client_id=client_id,
-                user_id=current_user.id,
-                date_performed=get_local_time()
+        # Create record
+        record = ChecklistRecord(
+            client_id=client_id,
+            user_id=current_user.id,
+            date_performed=get_local_time()
+        )
+        db.session.add(record)
+        db.session.flush()
+        
+        # Add notes if provided
+        if notes_text:
+            notes = ChecklistNotes(
+                checklist_record_id=record.id,
+                note_text=notes_text,
+                user_id=current_user.id
             )
-            db.session.add(record)
-            db.session.flush()  # Get the record ID
+            db.session.add(notes)
+
+        # Get the categories in order of how they appear in the checklist
+        categories = db.session.query(ChecklistCategory)\
+            .join(ChecklistItem)\
+            .filter(ChecklistItem.client_id == client_id)\
+            .order_by(ChecklistCategory.id)\
+            .distinct()\
+            .all()
+
+        # Build summary data using OrderedDict to preserve order
+        from collections import OrderedDict
+        summary_data = OrderedDict()
+        
+        # Process each category in order
+        for category in categories:
+            # Get items for this category
+            items = ChecklistItem.query.filter_by(
+                client_id=client_id,
+                category_id=category.id
+            ).all()
             
-            # Add notes if provided
-            if notes_text:
-                notes = ChecklistNotes(
-                    checklist_record_id=record.id,
-                    note_text=notes_text,
-                    user_id=current_user.id
-                )
-                db.session.add(notes)
-            
-            # Get all items for this client
-            client_items = ChecklistItem.query.filter_by(client_id=client_id).all()
-            
-            # Build summary data while creating CompletedItems
-            summary_data = {}
-            for item in client_items:
+            completed_items = []
+            for item in items:
                 completed = str(item.id) in completed_item_ids
                 
-                # Check for existing completed item
-                existing_completed = CompletedItem.query.filter_by(
+                # Create CompletedItem record
+                completed_item = CompletedItem(
                     record_id=record.id,
-                    checklist_item_id=item.id
-                ).first()
+                    checklist_item_id=item.id,
+                    completed=completed,
+                    completed_by=current_user.id if completed else None
+                )
+                db.session.add(completed_item)
                 
-                if not existing_completed:
-                    completed_item = CompletedItem(
-                        record_id=record.id,
-                        checklist_item_id=item.id,
-                        completed=completed,
-                        completed_by=current_user.id if completed else None
-                    )
-                    db.session.add(completed_item)
-                
-                # Build summary data
                 if completed:
-                    category = ChecklistCategory.query.get(item.category_id)
-                    if category:
-                        category_name = category.name
-                        if category_name not in summary_data:
-                            summary_data[category_name] = []
-                        summary_data[category_name].append(item.description)
+                    completed_items.append(item.description)
             
-            db.session.commit()
-            
-            # Clear client session data after successful submission
-            session_key = f'client_{client_id}_checklist'
-            if session_key in session:
-                session.pop(session_key)
-            
-            return jsonify({
-                'status': 'success',
-                'summary': summary_data,
-                'notes': notes_text,
-                'record_id': record.id
-            })
-            
-        except IntegrityError as e:
-            db.session.rollback()
-            current_app.logger.error(f"Integrity Error: {str(e)}")
-            return jsonify({
-                "status": "error",
-                "message": "Database integrity error. Possible duplicate entry."
-            }), 400
-            
-        except Exception as e:
-            db.session.rollback()
-            current_app.logger.error(f"Error submitting checklist: {str(e)}")
-            return jsonify({
-                "status": "error",
-                "message": "An error occurred while submitting the checklist."
-            }), 500
-            
+            # Only add to summary if there are completed items
+            if completed_items:
+                summary_data[category.name] = completed_items
+        
+        db.session.commit()
+        
+        return jsonify({
+            'status': 'success',
+            'summary': summary_data,
+            'notes': notes_text,
+            'record_id': record.id
+        })
+        
     except Exception as e:
-        current_app.logger.error(f"Unexpected error: {str(e)}")
+        db.session.rollback()
+        current_app.logger.error(f"Error in submit_checklist: {str(e)}")
         return jsonify({
             "status": "error",
-            "message": "An unexpected error occurred."
+            "message": "An error occurred while submitting the checklist."
         }), 500
-
-
 
 @main.route("/checklist-summary")
 @login_required
@@ -280,20 +305,19 @@ def checklist_summary():
 @main.route("/reports")
 @login_required
 def reports():
-    if not current_user.is_admin:
-        flash("Access denied. Admin privileges required.")
-        return redirect(url_for("main.dashboard"))
-
-    clients = Client.query.all()
-    users = User.query.all()
-
-    return render_template("reports.html", clients=clients, users=users)
-
+    if current_user.is_admin:
+        # Admin sees all clients and users
+        clients = Client.query.all()
+        users = User.query.all()
+        return render_template("reports.html", clients=clients, users=users)
+    else:
+        # Non-admin just needs their own data
+        return render_template("reports.html")
 
 @main.route("/reports/user/<int:user_id>")
 @login_required
 def user_report(user_id):
-    if not current_user.is_admin:
+    if not current_user.is_admin and user_id != current_user.id:
         flash("Access denied")
         return redirect(url_for("main.dashboard"))
 
@@ -731,15 +755,11 @@ def export_client_report(client_id):
 
 @main.route("/manage-clients")
 @login_required
+@requires_permission('manage_clients')
 def manage_clients():
-    if not current_user.is_admin:
-        flash("Access denied. Admin privileges required.")
-        return redirect(url_for("main.dashboard"))
-
     clients = Client.query.all()
     templates = ChecklistTemplate.query.all()
     return render_template("manage_clients.html", clients=clients, templates=templates)
-
 
 @main.route("/add-client", methods=["POST"])
 @login_required
@@ -857,10 +877,8 @@ def toggle_client(client_id):
 
 @main.route("/remove-client-category/<int:client_id>/<int:category_id>", methods=["POST"])
 @login_required
+@requires_permission('delete_category')
 def remove_client_category(client_id, category_id):
-    if not current_user.is_admin:
-        return jsonify({"status": "error", "message": "Access denied"}), 403
-
     try:
         # Delete all items in this category for this client
         ChecklistItem.query.filter_by(
@@ -868,14 +886,17 @@ def remove_client_category(client_id, category_id):
             category_id=category_id
         ).delete()
 
-        # If this is a custom category (associated with this client), delete it
-        category = ChecklistCategory.query.filter_by(
-            id=category_id,
-            client_id=client_id
-        ).first()
+        # Get the category
+        category = ChecklistCategory.query.get(category_id)
         
         if category:
-            db.session.delete(category)
+            # If it's a template category, just remove the association
+            if category.template_id:
+                # Maybe update a junction table or flag if needed
+                pass
+            else:
+                # If it's a custom category, delete it completely
+                db.session.delete(category)
 
         db.session.commit()
         return jsonify({"status": "success"})
@@ -895,7 +916,8 @@ def manage_users():
         return redirect(url_for("main.dashboard"))
 
     users = User.query.all()
-    return render_template("manage_users.html", users=users)
+    roles = Role.query.all()
+    return render_template("manage_users.html", users=users, roles=roles)
 
 
 @main.route("/add-user", methods=["POST"])
@@ -1044,10 +1066,8 @@ def edit_template(template_id):
 
 @main.route("/add-template-to-client/<int:client_id>", methods=["POST"])
 @login_required
+@requires_permission('add_template')
 def add_template_to_client(client_id):
-    if not current_user.is_admin:
-        flash("Access denied")
-        return redirect(url_for("main.dashboard"))
     
     template_id = request.form.get('template_id')
     print(f"DEBUG: Received template_id: {template_id}")
@@ -1135,9 +1155,6 @@ def delete_client(client_id):
 @main.route("/edit-client-structure/<int:client_id>", methods=["GET", "POST"])
 @login_required
 def edit_client_structure(client_id):
-    if not current_user.is_admin:
-        flash("Access denied")
-        return redirect(url_for("main.dashboard"))
         
     client = Client.query.get_or_404(client_id)
     
@@ -1238,10 +1255,8 @@ def edit_client_structure(client_id):
 
 @main.route('/add-custom-category/<int:client_id>', methods=['POST'])
 @login_required
+@requires_permission('add_category')
 def add_custom_category(client_id):
-    if not current_user.is_admin:
-        return jsonify({'error': 'Unauthorized'}), 403
-
     data = request.get_json()
     category_name = data.get('name')
     
@@ -1249,10 +1264,22 @@ def add_custom_category(client_id):
         return jsonify({'error': 'Category name is required'}), 400
         
     try:
+        # Check for existing active category with same name (case-insensitive)
+        existing_category = ChecklistCategory.query.join(
+            ChecklistItem,
+            ChecklistCategory.id == ChecklistItem.category_id
+        ).filter(
+            ChecklistItem.client_id == client_id,
+            func.lower(ChecklistCategory.name) == func.lower(category_name)
+        ).first()
+        
+        if existing_category:
+            return jsonify({'error': 'A category with this name already exists'}), 400
+            
         # Create new category associated with the client only
         category = ChecklistCategory(
             name=category_name,
-            client_id=client_id  # Associate with client instead of template
+            client_id=client_id
         )
         db.session.add(category)
         db.session.commit()

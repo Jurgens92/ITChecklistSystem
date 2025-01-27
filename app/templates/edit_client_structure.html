@@ -10,7 +10,9 @@
             <div class="category-section" data-category-id="{{ category.id }}">
                 <div class="category-header">
                     <h3>{{ category.name }}</h3>
+                    {% if current_user.is_admin or current_user.has_permission('delete_category') %}
                     <button type="button" class="remove-category-btn" onclick="removeCategory(this)">Remove Category</button>
+                    {% endif %}
                 </div>
                 <div class="items-list">
                     {% for item in items_by_category.get(category, []) %}
@@ -25,12 +27,15 @@
             {% endfor %}
         </div>
         
+        {% if current_user.is_admin or current_user.has_permission('add_category') %}
         <div class="add-category-section">
             <h3>Add New Category</h3>
             <input type="text" id="newCategoryName" placeholder="Enter new category name">
             <button onclick="addCustomCategory()" class="button">Add Category</button>
         </div>
+        {% endif %}
     </div>
+    
 
     <div class="form-actions">
         <button onclick="saveChanges()" class="button save-btn">Save Changes</button>
@@ -118,6 +123,15 @@ function addCustomCategory() {
     
     if (!categoryName) {
         alert('Please enter a category name');
+        return;
+    }
+    
+    // Check for existing categories
+    const existingCategories = Array.from(document.querySelectorAll('.category-header h3'))
+        .map(h3 => h3.textContent.toLowerCase());
+    
+    if (existingCategories.includes(categoryName.toLowerCase())) {
+        alert('A category with this name already exists');
         return;
     }
     

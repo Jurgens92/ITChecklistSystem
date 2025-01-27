@@ -1,9 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="reports-container">
-    <h1>Reports Dashboard</h1>
-    
-    <div class="report-sections">
+<div class="report-sections">
+    {% if current_user.is_admin %}
         <div class="report-card">
             <h2>Summary Report</h2>
             <p>View overall statistics and recent activity</p>
@@ -20,7 +18,7 @@
             </select>
             <button onclick="viewClientReport()" class="button">View Report</button>
         </div>
-        
+
         <div class="report-card">
             <h2>User Reports</h2>
             <select id="user-select" class="report-select">
@@ -31,7 +29,13 @@
             </select>
             <button onclick="viewUserReport()" class="button">View Report</button>
         </div>
-    </div>
+    {% else %}
+        <div class="report-card">
+            <h2>My Reports</h2>
+            <p>View your checklist history and activities</p>
+            <a href="{{ url_for('main.user_report', user_id=current_user.id) }}" class="button">View My Reports</a>
+        </div>
+    {% endif %}
 </div>
 
 <script>

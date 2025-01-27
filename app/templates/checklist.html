@@ -4,18 +4,22 @@
 <div class="checklist-container">
     <h1>Checklist for {{ client.name }}</h1>
 
-    {% if current_user.is_admin %}
-
+    {% if current_user.is_admin or current_user.has_permission('edit_checklist_structure') %}
     <div class="checklist-actions">
         <a href="{{ url_for('main.edit_client_structure', client_id=client.id) }}" class="button">Edit Checklist Structure</a>
     </div>
+{% endif %}
 
+{% if current_user.is_admin or current_user.has_permission('add_template') %}
     <div class="template-actions">
-        <form method="POST" action="{{ url_for('main.add_template_to_client', client_id=client.id) }}" class="add-template-form template-addition-form">
+        <form method="POST" 
+              action="{{ url_for('main.add_template_to_client', client_id=client.id) }}" 
+              class="add-template-form"
+              id="templateForm">
             <select name="template_id" required>
                 <option value="">Select template to add...</option>
                 {% for template in templates %}
-                <option value="{{ template.id }}">{{ template.name }}</option>
+                    <option value="{{ template.id }}">{{ template.name }}</option>
                 {% endfor %}
             </select>
             <button type="submit" class="button">Add Template</button>
@@ -66,78 +70,6 @@
     display: none;
 }
 </style>
-
-<script>
-function showError(message) {
-    const errorDiv = document.getElementById('errorMessage');
-    errorDiv.textContent = message;
-    errorDiv.style.display = 'block';
-    setTimeout(() => {
-        errorDiv.style.display = 'none';
-    }, 5000);
-}
-</script>
-
-    <script>
-        function getStorageKey(clientId) {
-            return `checklist_state_${clientId}`;
-        }
-        
-        function saveChecklistState() {
-            const clientId = document.querySelector('input[name="client_id"]').value;
-            const checkboxes = document.querySelectorAll('input[type="checkbox"]');
-            const notes = document.querySelector('textarea[name="notes"]').value;
-            
-            const state = {
-                date: new Date().toDateString(),
-                checkedItems: Array.from(checkboxes)
-                    .filter(cb => cb.checked)
-                    .map(cb => cb.value),
-                notes: notes
-            };
-            
-            localStorage.setItem(getStorageKey(clientId), JSON.stringify(state));
-        }
-        
-        function loadChecklistState() {
-            const clientId = document.querySelector('input[name="client_id"]').value;
-            const savedState = localStorage.getItem(getStorageKey(clientId));
-            
-            if (!savedState) return;
-            
-            const state = JSON.parse(savedState);
-            
-            // Clear state if it's from a previous day
-            if (state.date !== new Date().toDateString()) {
-                localStorage.removeItem(getStorageKey(clientId));
-                return;
-            }
-            
-            // Restore checked items
-            state.checkedItems.forEach(itemId => {
-                const checkbox = document.querySelector(`input[type="checkbox"][value="${itemId}"]`);
-                if (checkbox) checkbox.checked = true;
-            });
-            
-            // Restore notes
-            const notesTextarea = document.querySelector('textarea[name="notes"]');
-            if (notesTextarea && state.notes) {
-                notesTextarea.value = state.notes;
-            }
-        }
-        
-        // Save state when items are checked/unchecked
-        document.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
-            checkbox.addEventListener('change', saveChecklistState);
-        });
-        
-        // Save state when notes are updated (using input event for real-time saving)
-        document.querySelector('textarea[name="notes"]').addEventListener('input', saveChecklistState);
-        
-        // Load state when page loads
-        document.addEventListener('DOMContentLoaded', loadChecklistState);
-        </script>
-
 </div>
 
 <style>
@@ -215,49 +147,130 @@ function showError(message) {
 </style>
 
 <script>
-document.querySelector('form:not(.template-addition-form)').onsubmit = function(e) {
-    e.preventDefault();
-    
-    fetch("{{ url_for('main.submit_checklist') }}", {
-        method: 'POST',
-        body: new FormData(this),
-        headers: {
-            'X-Requested-With': 'XMLHttpRequest'
-        }
-    })
-    .then(response => {
-        if (!response.ok) {
-            throw new Error('Network response was not ok');
-        }
-        return response.json();
-    })
-    .then(data => {
-    if (data.status === 'success') {
-        // Clear localStorage when checklist is successfully submitted
-        const clientId = document.querySelector('input[name="client_id"]').value;
-        localStorage.removeItem(`checklist_state_${clientId}`);
-        showSummary(data.summary, data.notes);
-    } else {
-        alert('Error submitting checklist: ' + (data.message || 'Unknown error'));
+    // Form submission handler
+    const checklistForm = document.querySelector('form:not(#templateForm)');
+    if (checklistForm) {
+        checklistForm.onsubmit = function(e) {
+            e.preventDefault();
+            
+            fetch("{{ url_for('main.submit_checklist') }}", {
+                method: 'POST',
+                body: new FormData(this),
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.status === 'success') {
+                    // Clear localStorage when checklist is successfully submitted
+                    const clientId = document.querySelector('input[name="client_id"]').value;
+                    localStorage.removeItem(`checklist_state_${clientId}`);
+                    showSummary(data.summary, data.notes);
+                } else {
+                    alert('Error submitting checklist: ' + (data.message || 'Unknown error'));
+                }
+            })
+            .catch(error => {
+                console.error('Submission error:', error);
+                alert('Error submitting checklist. Please check the console for details.');
+            });
+        };
     }
-    })
-    .catch(error => {
-        console.error('Submission error:', error);
-        alert('Error submitting checklist. Please check the console for details.');
+    
+    // Checklist state management functions
+    function getStorageKey(clientId) {
+        return `checklist_state_${clientId}`;
+    }
+    
+    function saveChecklistState() {
+        const clientId = document.querySelector('input[name="client_id"]').value;
+        const checkboxes = document.querySelectorAll('input[type="checkbox"]');
+        const notes = document.querySelector('textarea[name="notes"]').value;
+        
+        const state = {
+            date: new Date().toDateString(),
+            checkedItems: Array.from(checkboxes)
+                .filter(cb => cb.checked)
+                .map(cb => cb.value),
+            notes: notes
+        };
+        
+        localStorage.setItem(getStorageKey(clientId), JSON.stringify(state));
+    }
+    
+    function loadChecklistState() {
+        const clientId = document.querySelector('input[name="client_id"]').value;
+        const savedState = localStorage.getItem(getStorageKey(clientId));
+        
+        if (!savedState) return;
+        
+        const state = JSON.parse(savedState);
+        
+        // Clear state if it's from a previous day
+        if (state.date !== new Date().toDateString()) {
+            localStorage.removeItem(getStorageKey(clientId));
+            return;
+        }
+        
+        // Restore checked items
+        state.checkedItems.forEach(itemId => {
+            const checkbox = document.querySelector(`input[type="checkbox"][value="${itemId}"]`);
+            if (checkbox) checkbox.checked = true;
+        });
+        
+        // Restore notes
+        const notesTextarea = document.querySelector('textarea[name="notes"]');
+        if (notesTextarea && state.notes) {
+            notesTextarea.value = state.notes;
+        }
+    }
+    
+    // Event listeners
+    document.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
+        checkbox.addEventListener('change', saveChecklistState);
     });
-};
-
-function showSummary(summary, notes) {
+    
+    const notesTextarea = document.querySelector('textarea[name="notes"]');
+    if (notesTextarea) {
+        notesTextarea.addEventListener('input', saveChecklistState);
+    }
+    
+    // Load state when page loads
+    document.addEventListener('DOMContentLoaded', loadChecklistState);
+    
+    // Summary functions
+    function showError(message) {
+        const errorDiv = document.getElementById('errorMessage');
+        errorDiv.textContent = message;
+        errorDiv.style.display = 'block';
+        setTimeout(() => {
+            errorDiv.style.display = 'none';
+        }, 5000);
+    }
+    
+    function showSummary(summary, notes) {
     let summaryText = '';
     
-    // Add categories and items
-    for (const [category, items] of Object.entries(summary)) {
-        summaryText += `${category}:\n`;
-        items.forEach(item => {
-            summaryText += `- ${item}\n`;
-        });
-        summaryText += '\n';
-    }
+    // Get all category headers from the page to maintain order
+    const categories = Array.from(document.querySelectorAll('.checklist-section h2'))
+        .map(header => header.textContent.trim());
+    
+    // Add categories and items in the same order as they appear on the page
+    categories.forEach(categoryName => {
+        if (summary[categoryName] && summary[categoryName].length > 0) {
+            summaryText += `${categoryName}:\n`;
+            summary[categoryName].forEach(item => {
+                summaryText += `- ${item}\n`;
+            });
+            summaryText += '\n';
+        }
+    });
     
     // Add notes if present
     if (notes) {
@@ -275,42 +288,36 @@ function showSummary(summary, notes) {
     document.getElementById('summaryContent').textContent = summaryText;
     document.getElementById('summaryModal').style.display = 'flex';
 }
-function copySummary() {
-    const summaryText = document.getElementById('summaryContent').textContent;
     
-    // Create temporary textarea element
-    const textarea = document.createElement('textarea');
-    textarea.value = summaryText;
-    
-    // Make the textarea invisible and add it to the document
-    textarea.style.position = 'fixed';
-    textarea.style.opacity = 0;
-    document.body.appendChild(textarea);
-    
-    // Select and copy the text
-    textarea.select();
-    let success = false;
-    
-    try {
-        success = document.execCommand('copy');
-        if (success) {
-            alert('Summary copied to clipboard!');
-        } else {
+    function copySummary() {
+        const summaryText = document.getElementById('summaryContent').textContent;
+        const textarea = document.createElement('textarea');
+        textarea.value = summaryText;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = 0;
+        document.body.appendChild(textarea);
+        textarea.select();
+        
+        let success = false;
+        try {
+            success = document.execCommand('copy');
+            if (success) {
+                alert('Summary copied to clipboard!');
+            } else {
+                alert('Unable to copy automatically. Please press Ctrl+C to copy.');
+            }
+        } catch (err) {
             alert('Unable to copy automatically. Please press Ctrl+C to copy.');
+            console.error('Copy failed:', err);
         }
-    } catch (err) {
-        alert('Unable to copy automatically. Please press Ctrl+C to copy.');
-        console.error('Copy failed:', err);
+        
+        document.body.removeChild(textarea);
     }
     
-    // Clean up by removing the temporary textarea
-    document.body.removeChild(textarea);
-}
-
-function closeSummaryModal() {
-    document.getElementById('summaryModal').style.display = 'none';
-    window.location.href = "{{ url_for('main.dashboard') }}";
-}
-</script>
+    function closeSummaryModal() {
+        document.getElementById('summaryModal').style.display = 'none';
+        window.location.href = "{{ url_for('main.dashboard') }}";
+    }
+    </script>
     
 {% endblock %}
