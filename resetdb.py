@@ -1,6 +1,15 @@
 # resetdb.py
 from app import create_app, db
-from app.models import User, Client, ChecklistTemplate, ChecklistCategory, TemplateItem, Settings
+from app.models import (
+    User, 
+    Client, 
+    ChecklistTemplate, 
+    ChecklistCategory, 
+    TemplateItem, 
+    Settings, 
+    Role,
+    ChecklistItem
+)
 import pytz
 from datetime import datetime
 
@@ -13,6 +22,24 @@ def create_default_data():
         db.session.add(default_settings)
         db.session.flush()  # Ensure settings are saved before continuing
 
+        # Create Power User role
+        power_user_role = Role(
+            name='Power User',
+            is_custom=False,
+            permissions=[
+                'manage_clients',
+                'view_reports',
+                'edit_checklist_structure',
+                'add_template',
+                'add_client',
+                'delete_category',
+                'add_category',
+                'add_client_template'
+            ]
+        )
+        db.session.add(power_user_role)
+        db.session.flush()
+
         # Create admin user
         admin = User(username='admin', is_admin=True)
         admin.set_password('admin')
@@ -22,6 +49,11 @@ def create_default_data():
         user = User(username='user', is_admin=False)
         user.set_password('user')
         db.session.add(user)
+
+        # Create power user
+        power_user = User(username='power_user', is_admin=False, role=power_user_role)
+        power_user.set_password('power_user')
+        db.session.add(power_user)
         db.session.flush()
 
         # Create default template
@@ -83,8 +115,24 @@ def create_default_data():
             db.session.add(template_item)
 
         # Create default client
-        client1 = Client(name='Client1', is_active=True)
+        client1 = Client(name='Demo Client', is_active=True)
         db.session.add(client1)
+        db.session.flush()
+
+        # Create client items from template
+        for category in [server_category, desktop_category]:
+            template_items = TemplateItem.query.filter_by(
+                template_id=default_template.id,
+                category_id=category.id
+            ).all()
+            
+            for template_item in template_items:
+                client_item = ChecklistItem(
+                    client_id=client1.id,
+                    description=template_item.description,
+                    category_id=category.id
+                )
+                db.session.add(client_item)
 
         # Final commit for all changes
         db.session.commit()
@@ -105,10 +153,22 @@ def reset_db():
             print("Creating default data...")
             create_default_data()
             print("Database reset complete!")
+            
+            print("\nDefault login credentials:")
+            print("\nAdmin User:")
+            print("Username: admin")
+            print("Password: admin")
+            print("\nPower User:")
+            print("Username: power_user")
+            print("Password: power_user")
+            print("\nStandard User:")
+            print("Username: user")
+            print("Password: user")
+            
         except Exception as e:
             print(f"Error resetting database: {e}")
             db.session.rollback()
-            raise  # Re-raise the exception to see the full traceback
+            raise
 
 if __name__ == '__main__':
     reset_db()

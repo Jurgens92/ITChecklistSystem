@@ -9,6 +9,7 @@ class User(UserMixin, db.Model):
     username = db.Column(db.String(80), unique=True, nullable=False)
     password_hash = db.Column(db.String(200), nullable=False)
     is_admin = db.Column(db.Boolean, default=False)
+    role_id = db.Column(db.Integer, db.ForeignKey('role.id'))
     checklist_records = db.relationship('ChecklistRecord', backref='user')
 
     def set_password(self, password):
@@ -16,6 +17,17 @@ class User(UserMixin, db.Model):
 
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
+
+    @property
+    def is_power_user(self):
+        return self.role is not None and self.role.name == 'Power User'
+
+    def has_permission(self, permission):
+        if self.is_admin:
+            return True
+        if self.role and self.role.permissions:
+            return permission in self.role.permissions
+        return False
 
 class Client(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -103,3 +115,13 @@ class Settings(db.Model):
     def get_timezone():
         settings = Settings.query.first()
         return settings.timezone if settings else 'UTC'
+
+class Role(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(80), unique=True, nullable=False)
+    is_custom = db.Column(db.Boolean, default=True)
+    permissions = db.Column(db.JSON)
+    users = db.relationship('User', backref='role', lazy=True)
+    
+    # Store permissions as a JSON string
+    permissions = db.Column(db.JSON)

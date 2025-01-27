@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="edit-role-container">
+    <h1>Edit Role: {{ role.name }}</h1>
+
+    <form method="POST" class="edit-role-form">
+        <div class="form-group">
+            <label for="role_name">Role Name:</label>
+            <input type="text" id="role_name" name="role_name" value="{{ role.name }}" required>
+        </div>
+        
+        <div class="permissions-group">
+            <h3>Permissions</h3>
+            <div class="checkbox-group">
+                <label>
+                    <input type="checkbox" name="permissions" value="manage_clients"
+                           {% if 'manage_clients' in role.permissions %}checked{% endif %}>
+                    Manage Clients
+                </label>
+                <label>
+                    <input type="checkbox" name="permissions" value="manage_users"
+                           {% if 'manage_users' in role.permissions %}checked{% endif %}>
+                    Manage Users
+                </label>
+                <label>
+                    <input type="checkbox" name="permissions" value="manage_templates"
+                           {% if 'manage_templates' in role.permissions %}checked{% endif %}>
+                    Manage Templates
+                </label>
+                <label>
+                    <input type="checkbox" name="permissions" value="view_reports"
+                           {% if 'view_reports' in role.permissions %}checked{% endif %}>
+                    View Reports
+                </label>
+                <label>
+                    <input type="checkbox" name="permissions" value="system_settings"
+                           {% if 'system_settings' in role.permissions %}checked{% endif %}>
+                    System Settings
+                </label>
+                <label>
+                    <input type="checkbox" name="permissions" value="edit_checklist_structure"
+                           {% if 'edit_checklist_structure' in role.permissions %}checked{% endif %}>
+                    Edit Checklist Structure
+                </label>
+                <label>
+                    <input type="checkbox" name="permissions" value="add_template"
+                           {% if 'add_template' in role.permissions %}checked{% endif %}>
+                    Add Template (In edit client structure)
+                </label>
+            </div>
+        </div>
+        
+        <div class="form-actions">
+            <button type="submit" class="button">Save Changes</button>
+            <a href="{{ url_for('main.manage_roles') }}" class="button secondary">Cancel</a>
+        </div>
+    </form>
+</div>
+
+<style>
+.edit-role-container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+.edit-role-form {
+    background: white;
+    padding: 20px;
+    border-radius: 5px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+
+.permissions-group {
+    margin: 20px 0;
+}
+
+.checkbox-group {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.checkbox-group label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.form-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+}
+</style>
+{% endblock %}
