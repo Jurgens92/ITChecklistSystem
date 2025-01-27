@@ -744,9 +744,6 @@ def manage_clients():
 @main.route("/add-client", methods=["POST"])
 @login_required
 def add_client():
-    if not current_user.is_admin:
-        flash("Access denied")
-        return redirect(url_for("main.dashboard"))
 
     client_name = request.form.get("client_name")
     template_id = request.form.get("template_id")
