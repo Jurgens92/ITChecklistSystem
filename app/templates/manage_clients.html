@@ -12,11 +12,11 @@
                        name="client_name" 
                        placeholder="Enter client name" 
                        required 
-                       class="form-control">
+                       class="form-control dark-input">
                 <select name="template_id" 
                         id="template_id" 
                         required 
-                        class="form-control">
+                        class="form-control dark-input">
                     {% for template in templates %}
                         <option value="{{ template.id }}">{{ template.name }}</option>
                     {% endfor %}
@@ -111,6 +111,30 @@ function filterClients() {
     </script>
 
 <style>
+
+.dark-input,
+.add-client-form input,
+.add-client-form select {
+    background-color: var(--dark-input-bg) !important;
+    color: var(--dark-text) !important;
+    border: 1px solid var(--dark-border) !important;
+}
+
+.add-client-form input::placeholder,
+.add-client-form select::placeholder {
+    color: var(--dark-text-muted) !important;
+    opacity: 0.7;
+}
+
+.add-client-section {
+    background-color: var(--dark-card-bg) !important;
+    color: var(--dark-text) !important;
+    border: 1px solid var(--dark-border) !important;
+}
+
+.add-client-section h2 {
+    color: var(--dark-text) !important;
+}
 
 .add-client-section {
     background-color: white;

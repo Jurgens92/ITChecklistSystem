@@ -3,12 +3,12 @@
 <div class="manage-templates-container">
     <h1>Manage Checklist Templates</h1>
 
-    <div class="add-template-section">
+    <div class="add-template-section dark-section">
         <h2>Add New Template</h2>
-        <form method="POST" action="{{ url_for('main.add_template') }}" class="template-form">
+        <form method="POST" action="{{ url_for('main.add_template') }}" class="template-form dark-form">
             <div class="form-group">
-                <input type="text" name="template_name" placeholder="Template name" required class="form-control">
-                <label class="checkbox-label">
+                <input type="text" name="template_name" placeholder="Template name" required class="form-control dark-input">
+                <label class="checkbox-label dark-label">
                     <input type="checkbox" name="is_default" value="true">
                     Set as default template
                 </label>
@@ -20,9 +20,9 @@
     <div class="template-list">
         <h2>Existing Templates</h2>
         {% for template in templates %}
-        <div class="template-card">
+        <div class="template-card dark-card">
             <div class="template-header">
-                <h3>{{ template.name }}</h3>
+                <h3 class="dark-text">{{ template.name }}</h3>
                 {% if template.is_default %}
                 <span class="default-badge">Default Template</span>
                 {% endif %}
@@ -33,7 +33,7 @@
             </div>
         </div>
         {% else %}
-        <p>No templates created yet.</p>
+        <p class="dark-text">No templates created yet.</p>
         {% endfor %}
     </div>
 
@@ -43,6 +43,99 @@
 </div>
 
 <style>
+.dark-section {
+    background-color: var(--dark-card-bg) !important;
+    color: var(--dark-text) !important;
+    border: 1px solid var(--dark-border) !important;
+}
+
+.dark-form {
+    background-color: var(--dark-card-bg) !important;
+    color: var(--dark-text) !important;
+}
+
+.dark-input {
+    background-color: var(--dark-input-bg) !important;
+    color: var(--dark-text) !important;
+    border: 1px solid var(--dark-border) !important;
+}
+
+.dark-label {
+    color: var(--dark-text) !important;
+}
+
+.dark-card {
+    background-color: var(--dark-card-bg) !important;
+    color: var(--dark-text) !important;
+    border: 1px solid var(--dark-border) !important;
+}
+
+.dark-text {
+    color: var(--dark-text) !important;
+}
+</style>
+
+<script>
+function deleteTemplate(templateId) {
+    if (confirm('Are you sure you want to delete this template?')) {
+        fetch(`/delete-template/${templateId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+        }).then(response => {
+            if (response.ok) {
+                window.location.reload();
+            } else {
+                alert('Error deleting template. Please try again.');
+            }
+        }).catch(error => {
+            console.error('Error:', error);
+            alert('Error deleting template. Please try again.');
+        });
+    }
+}
+</script>
+
+<style>
+
+.dark-section {
+    background-color: var(--dark-card-bg) !important;
+    color: var(--dark-text) !important;
+    border: 1px solid var(--dark-border) !important;
+    padding: 20px;
+    border-radius: 5px;
+    margin-bottom: 20px;
+}
+
+.dark-form {
+    background-color: var(--dark-card-bg) !important;
+    color: var(--dark-text) !important;
+}
+
+.dark-input {
+    background-color: var(--dark-input-bg) !important;
+    color: var(--dark-text) !important;
+    border: 1px solid var(--dark-border) !important;
+}
+
+.dark-label {
+    color: var(--dark-text) !important;
+}
+
+.dark-card {
+    background-color: var(--dark-card-bg) !important;
+    color: var(--dark-text) !important;
+    border: 1px solid var(--dark-border) !important;
+    padding: 20px;
+    margin: 10px 0;
+    border-radius: 5px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
+
+.dark-text {
+    color: var(--dark-text) !important;
+}
 .manage-templates-container {
     max-width: 1000px;
     margin: 0 auto;
