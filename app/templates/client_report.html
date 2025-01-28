@@ -10,11 +10,11 @@
             <form method="GET" class="filter-form">
                 <div class="form-group">
                     <label for="start_date">Start Date:</label>
-                    <input type="date" id="start_date" name="start_date" value="{{ start_date }}">
+                    <input type="date" id="start_date" name="start_date" value="{{ start_date }}" class="dark-input">
                 </div>
                 <div class="form-group">
                     <label for="end_date">End Date:</label>
-                    <input type="date" id="end_date" name="end_date" value="{{ end_date }}">
+                    <input type="date" id="end_date" name="end_date" value="{{ end_date }}" class="dark-input">
                 </div>
                 <button type="submit" class="button">Apply Filter</button>
             </form>
@@ -65,15 +65,19 @@
     }
 
     .report-section {
-        background: white;
+        background-color: var(--dark-card-bg) !important;
+        color: var(--dark-text) !important;
+        border: 1px solid var(--dark-border) !important;
         padding: 20px;
         border-radius: 5px;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        box-shadow: 0 2px 5px rgba(0,0,0,0.2);
         margin-bottom: 20px;
     }
 
     .date-filter {
-        background: white;
+        background-color: var(--dark-card-bg) !important;
+        color: var(--dark-text) !important;
+        border: 1px solid var(--dark-border) !important;
         padding: 15px;
         border-radius: 5px;
         margin: 15px 0;
@@ -91,35 +95,28 @@
         gap: 5px;
     }
 
+    .form-group label {
+        color: var(--dark-text) !important;
+    }
+
+    .dark-input,
     .form-group input[type="date"] {
+        background-color: var(--dark-input-bg) !important;
+        color: var(--dark-text) !important;
+        border: 1px solid var(--dark-border) !important;
         padding: 8px;
-        border: 1px solid #ddd;
         border-radius: 4px;
+    }
+
+    /* Ensure date input shows text correctly in dark mode */
+    input[type="date"]::-webkit-calendar-picker-indicator {
+        filter: invert(1) brightness(0.8);
     }
 
     .button-group {
         display: flex;
         gap: 10px;
         margin: 20px 0;
-    }
-
-    .button {
-        display: inline-block;
-        padding: 10px 20px;
-        border: none;
-        border-radius: 4px;
-        cursor: pointer;
-        text-decoration: none;
-        color: white;
-        font-size: 14px;
-    }
-
-    .export-btn {
-        background-color: #28a745;
-    }
-
-    .button.secondary {
-        background-color: #6c757d;
     }
 
     .report-table {
@@ -131,11 +128,13 @@
     .report-table td {
         padding: 12px;
         text-align: left;
-        border-bottom: 1px solid #ddd;
+        border-bottom: 1px solid var(--dark-border) !important;
+        color: var(--dark-text) !important;
     }
 
     .report-table th {
-        background-color: #f8f9fa;
+        background-color: var(--dark-bg) !important;
+        color: var(--dark-text) !important;
         font-weight: bold;
     }
 
@@ -146,6 +145,14 @@
 
     .items-completed-link:hover {
         text-decoration: underline;
+    }
+
+    /* Responsive adjustments */
+    @media (max-width: 768px) {
+        .filter-form {
+            flex-direction: column;
+            align-items: stretch;
+        }
     }
 </style>
 {% endblock %}

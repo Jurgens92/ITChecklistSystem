@@ -11,15 +11,15 @@
 {% endif %}
 
 {% if current_user.is_admin or current_user.has_permission('add_template') %}
-    <div class="template-actions">
+    <div class="template-actions dark-section">
         <form method="POST" 
               action="{{ url_for('main.add_template_to_client', client_id=client.id) }}" 
               class="add-template-form"
               id="templateForm">
-            <select name="template_id" required>
-                <option value="">Select template to add...</option>
+            <select name="template_id" required class="dark-input">
+                <option value="" style="background-color: var(--input-bg); color: var(--text);">Select template to add...</option>
                 {% for template in templates %}
-                    <option value="{{ template.id }}">{{ template.name }}</option>
+                    <option value="{{ template.id }}" style="background-color: var(--input-bg); color: var(--text);">{{ template.name }}</option>
                 {% endfor %}
             </select>
             <button type="submit" class="button">Add Template</button>
@@ -68,6 +68,28 @@
     margin: 10px 0;
     border-radius: 4px;
     display: none;
+}
+
+.dark-section {
+    background-color: var(--card-bg) !important;
+    color: var(--text) !important;
+    border: 1px solid var(--border-color) !important;
+    padding: 15px;
+    border-radius: 5px;
+    margin-bottom: 20px;
+}
+
+.dark-input {
+    background-color: var(--input-bg) !important;
+    color: var(--text) !important;
+    border: 1px solid var(--border-color) !important;
+    padding: 8px;
+    border-radius: 4px;
+}
+
+.dark-input option {
+    background-color: var(--input-bg) !important;
+    color: var(--text) !important;
 }
 </style>
 </div>

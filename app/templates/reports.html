@@ -10,10 +10,10 @@
         
         <div class="report-card">
             <h2>Client Reports</h2>
-            <select id="client-select" class="report-select">
-                <option value="">Select a client...</option>
+            <select id="client-select" class="report-select dark-input">
+                <option value="" style="background-color: var(--input-bg); color: var(--text);">Select a client...</option>
                 {% for client in clients %}
-                <option value="{{ client.id }}">{{ client.name }}</option>
+                <option value="{{ client.id }}" style="background-color: var(--input-bg); color: var(--text);">{{ client.name }}</option>
                 {% endfor %}
             </select>
             <button onclick="viewClientReport()" class="button">View Report</button>
@@ -21,10 +21,10 @@
 
         <div class="report-card">
             <h2>User Reports</h2>
-            <select id="user-select" class="report-select">
-                <option value="">Select a user...</option>
+            <select id="user-select" class="report-select dark-input">
+                <option value="" style="background-color: var(--input-bg); color: var(--text);">Select a user...</option>
                 {% for user in users %}
-                <option value="{{ user.id }}">{{ user.username }}</option>
+                <option value="{{ user.id }}" style="background-color: var(--input-bg); color: var(--text);">{{ user.username }}</option>
                 {% endfor %}
             </select>
             <button onclick="viewUserReport()" class="button">View Report</button>
@@ -37,6 +37,7 @@
         </div>
     {% endif %}
 </div>
+
 
 <script>
 function viewClientReport() {
@@ -53,4 +54,20 @@ function viewUserReport() {
     }
 }
 </script>
+
+<style>
+.dark-input {
+    background-color: var(--input-bg) !important;
+    color: var(--text) !important;
+    border: 1px solid var(--border-color) !important;
+    padding: 8px;
+    border-radius: 4px;
+}
+
+.dark-input option {
+    background-color: var(--input-bg) !important;
+    color: var(--text) !important;
+}
+
+</style>
 {% endblock %}

@@ -4,13 +4,776 @@
     <title>IT Checklist System</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+
+
+<style id="theme-style"></style>
+<script>
+function toggleTheme() {
+    const currentTheme = localStorage.getItem('theme') || 'light';
+    const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+    localStorage.setItem('theme', newTheme);
+    applyTheme(newTheme);
+}
+
+function applyTheme(theme) {
+    const themeStyle = document.getElementById('theme-style');
+    if (theme === 'dark') {
+        themeStyle.textContent = `
+            :root {
+                --bg-color: #1e1e1e;
+                --text-color: #e0e0e0;
+                --card-bg: #2d2d2d;
+                --input-bg: #383838;
+                --border-color: #404040;
+                --hover-color: #3a3a3a;
+                --selection-bg: #0078d4;
+            }
+            
+            body {
+                background-color: var(--bg-color);
+                color: var(--text-color);
+            }
+            
+            /* Client selection area */
+            .client-select, 
+            #clientDropdown,
+            #clientSearch {
+                background-color: var(--input-bg);
+                color: var(--text-color);
+                border: 1px solid var(--border-color);
+            }
+            
+            .client-select option,
+            #clientDropdown option {
+                background-color: var(--input-bg);
+                color: var(--text-color);
+                padding: 8px;
+            }
+            
+            .client-select option:hover,
+            .client-select option:focus,
+            #clientDropdown option:hover,
+            #clientDropdown option:focus {
+                background-color: var(--selection-bg);
+            }
+            
+            /* Admin Controls section */
+            .admin-section {
+                background-color: var(--card-bg);
+                border: 1px solid var(--border-color);
+                border-radius: 8px;
+                padding: 20px;
+                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+            }
+            
+            .admin-section h2 {
+                color: var(--text-color);
+            }
+
+.admin-section .button,
+.admin-section a.button,
+.button-row .button,
+.button-row a {
+    background-color: #007bff !important; /* Bootstrap primary blue */
+    color: white !important;
+    border: none !important;
+    transition: background-color 0.2s ease;
+}
+
+.admin-section .button:hover,
+.admin-section a.button:hover,
+.button-row .button:hover,
+.button-row a:hover {
+    background-color: #0056b3 !important; /* Darker blue on hover */
+    opacity: 0.9;
+}
+
+
+
+
+            
+            /* Buttons */
+            .button {
+                background-color: #0078d4;
+                border: none;
+                color: white;
+            }
+            
+            .button:hover {
+                background-color: #106ebe;
+            }
+            
+            /* Headers and text */
+            h1, h2, h3, h4, h5, h6 {
+                color: var(--text-color);
+            }
+            
+            .welcome-message {
+                color: var(--text-color);
+            }
+            
+            /* Client search input */
+            .search-input {
+                background-color: var(--input-bg);
+                color: var(--text-color);
+                border: 1px solid var(--border-color);
+            }
+            
+            /* Selection styling */
+            ::selection {
+                background-color: var(--selection-bg);
+                color: white;
+            }
+            
+            /* Client area background */
+            .client-section {
+                background-color: var(--card-bg);
+                border: 1px solid var(--border-color);
+                padding: 20px;
+                border-radius: 5px;
+                margin-bottom: 20px;
+            }
+
+            .admin-section,
+            .dashboard .admin-section {
+                background-color: var(--card-bg);
+                border: 1px solid var(--border-color);
+                border-radius: 8px;
+                padding: 20px;
+                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+            }
+
+            .admin-section h2,
+            .dashboard .admin-section h2 {
+                color: var(--text-color);
+            }
+
+            /* Admin Controls title color fix */
+            .admin-section > h2:first-child {
+                color: var(--text-color);
+            }
+
+            [href*="manage"],
+            [href*="reports"],
+            [href*="settings"] {
+                background-color: var(--card-bg-darker) !important;
+                color: var(--text-color) !important;
+                border: 1px solid var(--border-color) !important;
+            }
+
+            [href*="manage"]:hover,
+            [href*="reports"]:hover,
+            [href*="settings"]:hover {
+                background-color: var(--hover-color) !important;
+                border-color: var(--selection-bg) !important;
+            }
+
+
+            .admin-section a[href*="manage-clients"],
+            .admin-section a[href*="manage-users"],
+            .admin-section a[href*="manage-templates"],
+            .admin-section a[href*="reports"],
+            .admin-section a[href*="settings"] {
+                background-color: #007bff !important;
+                color: white !important;
+                border: none !important;
+            }
+
+            /* Button hover states */
+            .admin-section a[href*="manage-clients"]:hover,
+            .admin-section a[href*="manage-users"]:hover,
+            .admin-section a[href*="manage-templates"]:hover,
+            .admin-section a[href*="reports"]:hover,
+            .admin-section a[href*="settings"]:hover {
+                background-color: #0056b3 !important;
+                opacity: 0.9;       
+            }
+
+            /* Additional direct button styling */
+            .admin-section .button, 
+            #Manage-Clients,
+            #Manage-Users,
+            #Manage-Templates,
+            #View-Reports,
+            #System-Settings {
+                background-color: var(--card-bg-darker) !important;
+                color: var(--text-color) !important;
+            }
+
+            /* Footer actions and other buttons */
+            .form-actions .button,
+            .button.secondary {
+                background-color: var(--card-bg-darker);
+                color: var(--text-color);
+                border: 1px solid var(--border-color);
+            }
+
+            
+
+            /* Fix white cards in summary stats */
+            .stat-card,
+            .report-card,
+            .summary-stats > div {
+                background-color: var(--dark-card-bg) !important;
+                color: var(--dark-text) !important;
+                border: 1px solid var(--dark-border) !important;
+            }
+
+            /* Fix white backgrounds in tables */
+            .user-table tr,
+            .client-table tr,
+            .report-table tr {
+                background-color: var(--dark-card-bg) !important;
+                color: var(--dark-text) !important;
+            }
+
+            /* Fix white backgrounds in form sections */
+            .add-client-section,
+            .add-user-section,
+            .add-template-section {
+                background-color: var(--dark-card-bg) !important;
+                color: var(--dark-text) !important;
+                padding: 20px;
+                border-radius: 5px;
+                margin-bottom: 20px;
+                border: 1px solid var(--dark-border) !important;
+            }
+
+            /* Fix template cards and sections */
+            .template-card,
+            .checklist-section,
+            .existing-templates > div {
+                background-color: var(--dark-card-bg) !important;
+                color: var(--dark-text) !important;
+                border: 1px solid var(--dark-border) !important;
+            }
+
+            /* Fix form input backgrounds */
+            input[type="text"],
+            input[type="password"],
+            select,
+            textarea {
+                background-color: var(--dark-input-bg) !important;
+                color: var(--dark-text) !important;
+                border: 1px solid var(--dark-border) !important;
+            }
+
+            /* Fix radio buttons and checkboxes */
+            .radio-group label,
+            .checkbox-group label {
+                color: var(--dark-text) !important;
+            }
+
+            /* Fix table rows */
+            tbody tr {
+                background-color: var(--dark-card-bg) !important;
+                border-color: var(--dark-border) !important;
+            }
+
+            tbody tr:hover {
+                background-color: var(--dark-hover) !important;
+            }
+
+            /* Fix table headers */
+            thead th {
+                background-color: var(--dark-bg) !important;
+                color: var(--dark-text) !important;
+                border-color: var(--dark-border) !important;
+            }
+
+            /* Fix labels and text */
+            label, h1, h2, h3, h4, h5, h6, p {
+                color: var(--dark-text) !important;
+            }
+
+            /* Fix any remaining white containers */
+            .container,
+            .card,
+            .modal-content,
+            .dropdown-menu {
+                background-color: var(--dark-card-bg) !important;
+                color: var(--dark-text) !important;
+                border-color: var(--dark-border) !important;
+            }
+
+            /* Fix stats boxes in summary report */
+            .stat-number {
+                color: #007bff !important;
+            }
+
+            /* Improve contrast for active/archived status */
+            .status-badge.active {
+                background-color: #198754 !important;
+                color: white !important;
+            }
+
+            .status-badge.archived {
+                background-color: #dc3545 !important;
+                color: white !important;
+            }
+
+            /* Fix white backgrounds in date filters */
+            .date-filter,
+            .filter-form {
+                background-color: var(--dark-card-bg) !important;
+                color: var(--dark-text) !important;
+            }
+                                    
+            /* Fix table header area that's still white */
+            .table-header,
+            .report-header {
+                background-color: var(--dark-bg) !important;
+                color: var(--dark-text) !important;
+            }
+
+            .actions-header,
+            .status-header {
+                background-color: var(--dark-bg) !important;
+                color: var(--dark-text) !important;
+            }
+
+            input[type="date"] {
+                background-color: var(--dark-input-bg) !important;
+                color: var(--dark-text) !important;
+                border-color: var(--dark-border) !important;
+            }
+
+            .template-section > div,
+            .template-content {
+                background-color: var(--dark-card-bg) !important;
+                color: var(--dark-text) !important;
+            }
+
+            .button {
+                border: 1px solid var(--dark-border) !important;
+            }
+
+
+            table th:last-child,
+            .table-header-cell {
+                background-color: var(--dark-bg) !important;
+            }
+
+            /* Fix white backgrounds in template management page */
+            .manage-templates-container form,
+            .template-form,
+            .form-group {
+                background-color: var(--dark-card-bg) !important;
+                color: var(--dark-text) !important;
+                border-color: var(--dark-border) !important;
+            }
+
+            /* Fix the white input box area */
+            .form-control,
+            input[type="text"].form-control {
+                background-color: var(--dark-input-bg) !important;
+                color: var(--dark-text) !important;
+                border: 1px solid var(--dark-border) !important;
+            }
+
+            /* Fix the white card sections */
+            .template-card,
+            .template-card > div {
+                background-color: var(--dark-card-bg) !important;
+                color: var(--dark-text) !important;
+                border-color: var(--dark-border) !important;
+            }
+
+            /* Fix any remaining white backgrounds */
+            .add-template-section > div,
+            .existing-templates > div {
+                background-color: var(--dark-card-bg) !important;
+                color: var(--dark-text) !important;
+            }
+
+            /* Fix checkbox label color */
+            .checkbox-label {
+                color: var(--dark-text) !important;
+            }
+
+            /* Ensure proper contrast for template badge */
+            .default-template-badge {
+                background-color: #198754 !important;
+                color: white !important;
+                border: none !important;
+            }
+
+            /* Fix white form backgrounds in Add New User section */
+            .manage-users-container form,
+            .add-user-section > div,
+            .add-user-form {
+                background-color: var(--dark-card-bg) !important;
+                color: var(--dark-text) !important;
+                border-color: var(--dark-border) !important;
+            }
+
+            /* Fix the username and password input fields */
+            .form-control,
+            input[type="text"],
+            input[type="password"] {
+                background-color: var(--dark-input-bg) !important;
+                color: var(--dark-text) !important;
+                border: 1px solid var(--dark-border) !important;
+            }
+
+            /* Fix radio button labels */
+            .radio-group label,
+            .user-type-label {
+                color: var(--dark-text) !important;
+            }
+
+            /* Style role badges */
+            .role-badge.admin {
+                background-color: #0d6efd !important;
+                color: white !important;
+            }
+
+            .role-badge.power-user {
+                background-color: #198754 !important;
+                color: white !important;
+            }
+
+            /* Fix search input */
+            #userSearch,
+            .search-input {
+                background-color: var(--dark-input-bg) !important;
+                color: var(--dark-text) !important;
+                border: 1px solid var(--dark-border) !important;
+            }
+
+            /* Fix any remaining white sections */
+            .user-list-section > div,
+            .user-card {
+                background-color: var(--dark-card-bg) !important;
+                color: var(--dark-text) !important;
+            }
+
+            /* Maintain button styles */
+            .button {
+                border: none !important;
+            }
+
+            .button.delete {
+                background-color: #dc3545 !important;
+            }
+
+            .button.assign-role {
+                background-color: #17a2b8 !important;
+            }
+
+            .button.reset-password {
+                background-color: #ffc107 !important;
+                color: #000 !important;
+            }
+
+            /* Fix white backgrounds in checklist view */
+            .checklist-container {
+                background-color: var(--dark-bg) !important;
+                color: var(--dark-text) !important;
+            }
+
+            /* Fix template selector dropdown and section */
+            .template-selector,
+            select[name="template_id"] {
+                background-color: var(--dark-input-bg) !important;
+                color: var(--dark-text) !important;
+                border: 1px solid var(--dark-border) !important;
+            }
+
+            /* Fix checklist sections */
+            .checklist-section {
+                background-color: var(--dark-card-bg) !important;
+                color: var(--dark-text) !important;
+                border: 1px solid var(--dark-border) !important;
+                margin-bottom: 20px;
+                padding: 20px;
+            }
+
+            /* Fix checkbox items */
+            .checklist-item {
+                border-bottom: 1px solid var(--dark-border) !important;
+                padding: 10px 0;
+            }
+
+            .checklist-item label {
+                color: var(--dark-text) !important;
+            }
+
+            /* Fix notes section */
+            .notes-section {
+                background-color: var(--dark-card-bg) !important;
+                color: var(--dark-text) !important;
+                border: 1px solid var(--dark-border) !important;
+                padding: 20px;
+                margin-top: 20px;
+            }
+
+            .notes-textarea {
+                background-color: var(--dark-input-bg) !important;
+                color: var(--dark-text) !important;
+                border: 1px solid var(--dark-border) !important;
+                width: 100%;
+                min-height: 150px;
+                padding: 10px;
+            }
+
+            /* Fix action buttons */
+            .checklist-actions {
+                margin-top: 20px;
+            }
+
+            .button {
+                border: none !important;
+            }
+
+            /* Fix white backgrounds in modals */
+            .modal-content {
+                background-color: var(--dark-card-bg) !important;
+                color: var(--dark-text) !important;
+                border: 1px solid var(--dark-border) !important;
+            }
+
+            /* Fix checkbox and radio styling */
+            input[type="checkbox"],
+            input[type="radio"] {
+                accent-color: #0d6efd !important;
+            }
+
+            /* Fix heading colors */
+            h1, h2, h3, h4, h5, h6 {
+                color: var(--dark-text) !important;
+            }
+
+            /* Fix white section in client list table header */
+            .client-table th:last-child,
+            .client-table thead tr th:last-child,
+            table th:last-child,
+            th[style*="background-color: white"],
+            .table-header-cell {
+                background-color: var(--dark-bg) !important;
+                color: var(--dark-text) !important;
+                border-color: var(--dark-border) !important;
+            }
+
+            /* Ensure all table headers are consistent */
+            .client-table th,
+            .client-list th,
+            table th {
+                background-color: var(--dark-bg) !important;
+                color: var(--dark-text) !important;
+                border-color: var(--dark-border) !important;
+            }
+
+            /* Fix any potential white spaces in the header row */
+            .client-table tr,
+            .client-table thead tr,
+            table thead tr {
+                background-color: var(--dark-bg) !important;
+            }
+
+            /* Inside the dark theme CSS block */
+.button,
+button.button,
+input[type="button"].button,
+input[type="submit"].button,
+a.button {
+    background-color: #007bff !important;
+    color: white !important;
+    border: none !important;
+    transition: background-color 0.2s ease;
+}
+
+.button:hover,
+button.button:hover,
+input[type="button"].button:hover,
+input[type="submit"].button:hover,
+a.button:hover {
+    background-color: #0056b3 !important;
+    opacity: 0.9;
+}
+
+/* Specific fix for View Checklist button */
+#clientDropdown + .button,
+button[onclick*="viewSelectedClient"] {
+    background-color: #007bff !important;
+    color: white !important;
+    border: none !important;
+}
+
+#clientDropdown + .button:hover,
+button[onclick*="viewSelectedClient"]:hover {
+    background-color: #0056b3 !important;
+    opacity: 0.9;
+}
+
+/* Fix table backgrounds in dark mode */
+.user-table,
+.user-table tr,
+.user-table td {
+    background-color: var(--card-bg) !important;
+    color: var(--text-color) !important;
+    border-color: var(--border-color) !important;
+}
+
+.user-table th {
+    background-color: var(--bg-color) !important;
+    color: var(--text-color) !important;
+    border-color: var(--border-color) !important;
+}
+
+/* Fix table hover states */
+.user-table tr:hover {
+    background-color: var(--hover-color) !important;
+}
+
+/* Fix user list section background */
+.user-list-section {
+    background-color: var(--card-bg) !important;
+    color: var(--text-color) !important;
+}
+
+/* Fix any nested table elements */
+.user-list-section table,
+.user-list-section tbody,
+.user-list-section tr {
+    background-color: var(--card-bg) !important;
+    color: var(--text-color) !important;
+}
+
+/* Ensure consistent borders */
+.user-table td,
+.user-table th {
+    border-bottom: 1px solid var(--border-color) !important;
+}
+
+/* Fix Client List table backgrounds in dark mode */
+.client-table,
+.client-table tr,
+.client-table td {
+    background-color: var(--card-bg) !important;
+    color: var(--text-color) !important;
+    border-color: var(--border-color) !important;
+}
+
+.client-table th {
+    background-color: var(--bg-color) !important;
+    color: var(--text-color) !important;
+    border-color: var(--border-color) !important;
+}
+
+/* Fix table hover states */
+.client-table tr:hover {
+    background-color: var(--hover-color) !important;
+}
+
+/* Fix client list section background */
+.client-list-section {
+    background-color: var(--card-bg) !important;
+    color: var(--text-color) !important;
+}
+
+/* Fix nested table elements */
+.client-list-section table,
+.client-list-section tbody,
+.client-list-section tr {
+    background-color: var(--card-bg) !important;
+    color: var(--text-color) !important;
+}
+
+/* Ensure consistent borders */
+.client-table td,
+.client-table th {
+    border-bottom: 1px solid var(--border-color) !important;
+}
+
+/* Fix add client section if present */
+.add-client-section {
+    background-color: var(--card-bg) !important;
+    color: var(--text-color) !important;
+    border-color: var(--border-color) !important;
+}
+
+/* Fix Summary Report tables in dark mode */
+.report-table,
+.report-table tr,
+.report-table td {
+    background-color: var(--card-bg) !important;
+    color: var(--text-color) !important;
+    border-color: var(--border-color) !important;
+}
+
+.report-table th {
+    background-color: var(--bg-color) !important;
+    color: var(--text-color) !important;
+    border-color: var(--border-color) !important;
+}
+
+/* Fix table hover states */
+.report-table tr:hover {
+    background-color: var(--hover-color) !important;
+}
+
+/* Fix report section backgrounds */
+.report-section {
+    background-color: var(--card-bg) !important;
+    color: var(--text-color) !important;
+}
+
+/* Fix nested table elements */
+.report-section table,
+.report-section tbody,
+.report-section tr {
+    background-color: var(--card-bg) !important;
+    color: var(--text-color) !important;
+}
+
+/* Ensure consistent borders */
+.report-table td,
+.report-table th {
+    border-bottom: 1px solid var(--border-color) !important;
+}
+
+/* Fix stat cards background */
+.stat-card {
+    background-color: var(--card-bg) !important;
+    color: var(--text-color) !important;
+    border-color: var(--border-color) !important;
+}
+
+/* Keep the stat numbers blue for contrast */
+.stat-number {
+    color: #007bff !important;
+}
+
+
+        `;
+    } else {
+        themeStyle.textContent = '';
+    }
+}
+
+
+// Apply theme on page load
+document.addEventListener('DOMContentLoaded', () => {
+    const savedTheme = localStorage.getItem('theme') || 'light';
+    applyTheme(savedTheme);
+});
+</script>
+
 </head>
 <body>
     <nav>
         {% if current_user.is_authenticated %}
-        <a href="{{ url_for('main.dashboard') }}">Dashboard</a>
-        <a href="{{ url_for('main.change_password') }}">Change Password</a>
-        <a href="{{ url_for('main.logout') }}">Logout</a>
+        <div class="nav-left">
+            <a href="{{ url_for('main.dashboard') }}">Dashboard</a>
+            <a href="{{ url_for('main.change_password') }}">Change Password</a>
+            <a href="{{ url_for('main.logout') }}">Logout</a>
+        </div>
+        <div class="nav-right">
+            <button onclick="toggleTheme()" class="theme-toggle">
+                <span class="theme-icon">🌓</span>
+            </button>
+        </div>
         {% endif %}
     </nav>
     {% with messages = get_flashed_messages() %}

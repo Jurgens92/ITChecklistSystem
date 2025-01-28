@@ -289,3 +289,44 @@ nav a:hover {
     border: 1px solid #ddd;
     border-radius: 4px;
 }
+
+/* dark shit*/
+
+
+
+/* Theme toggle styling */
+.nav-left {
+    float: left;
+}
+
+.nav-right {
+    float: right;
+}
+
+nav {
+    overflow: hidden;
+}
+
+.theme-toggle {
+    background: none;
+    border: none;
+    color: inherit;
+    cursor: pointer;
+    padding: 8px;
+    font-size: 1.2em;
+}
+
+.theme-toggle:hover {
+    opacity: 0.8;
+}
+
+/* Make sure form inputs and elements respect theme */
+input, select, textarea {
+    transition: background-color 0.3s, color 0.3s, border-color 0.3s;
+}
+
+.card, .checklist-section, .report-section, 
+.modal-content, .settings-section, 
+.template-card, .client-card {
+    transition: background-color 0.3s, border-color 0.3s;
+}
