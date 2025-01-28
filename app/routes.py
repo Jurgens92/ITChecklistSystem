@@ -314,10 +314,11 @@ def reports():
         # Non-admin just needs their own data
         return render_template("reports.html")
 
-@main.route("/reports/user/<int:user_id>")
+@main.route("/user_report/<int:user_id>")
 @login_required
 def user_report(user_id):
-    if not current_user.is_admin and user_id != current_user.id:
+    # Allow access if user is admin OR if user is viewing their own report
+    if not (current_user.is_admin or user_id == current_user.id or current_user.has_permission('view_reports')):
         flash("Access denied")
         return redirect(url_for("main.dashboard"))
 
@@ -340,7 +341,6 @@ def user_report(user_id):
     
     if end_date:
         try:
-            # Add one day to include the end date fully
             end = datetime.strptime(end_date, '%Y-%m-%d') + timedelta(days=1)
             query = query.filter(ChecklistRecord.date_performed < end)
         except ValueError:
@@ -357,7 +357,7 @@ def user_report(user_id):
         end_date=end_date,
         convert_to_local_time=convert_to_local_time
     )
-
+    
 @main.route("/reports/summary")
 @login_required
 def summary_report():
@@ -842,7 +842,6 @@ def delete_template(template_id):
         return jsonify({"status": "error", "message": str(e)}), 500
 
 
-
 @main.route("/rename-template/<int:template_id>", methods=["POST"])
 @login_required
 def rename_template(template_id):
@@ -862,7 +861,6 @@ def rename_template(template_id):
     except Exception as e:
         db.session.rollback()
         return jsonify({"status": "error", "message": str(e)}), 500
-
 
 
 @main.route('/add-category/<int:template_id>', methods=['POST'])
