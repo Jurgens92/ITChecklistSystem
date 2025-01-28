@@ -29,6 +29,7 @@
             </div>
             <div class="template-actions">
                 <a href="{{ url_for('main.edit_template', template_id=template.id) }}" class="button">Edit Items</a>
+                <button onclick="startRename({{ template.id }}, '{{ template.name }}')" class="button rename-btn">Rename</button>
                 <button onclick="deleteTemplate({{ template.id }})" class="button delete-btn">Delete</button>
             </div>
         </div>
@@ -73,9 +74,47 @@
 .dark-text {
     color: var(--dark-text) !important;
 }
+
+.template-name {
+    cursor: pointer;
+}
+
+.template-name:hover {
+    text-decoration: underline;
+}
 </style>
 
 <script>
+
+function startRename(templateId, currentName) {
+    const newName = prompt('Enter new template name:', currentName);
+    if (newName && newName !== currentName) {
+        renameTemplate(templateId, newName);
+    }
+}
+
+function renameTemplate(templateId, newName) {
+    fetch(`/rename-template/${templateId}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ name: newName })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            window.location.reload();
+        } else {
+            alert('Error renaming template: ' + (data.message || 'Unknown error'));
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error renaming template. Please try again.');
+    });
+}
+
 function deleteTemplate(templateId) {
     if (confirm('Are you sure you want to delete this template?')) {
         fetch(`/delete-template/${templateId}`, {
@@ -190,6 +229,15 @@ function deleteTemplate(templateId) {
     display: block;
     margin-top: 10px;
 }
+
+.template-name {
+    cursor: pointer;
+}
+
+.template-name:hover {
+    text-decoration: underline;
+}
+
 </style>
 
 <script>
