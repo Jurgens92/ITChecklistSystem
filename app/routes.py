@@ -827,13 +827,43 @@ def delete_template(template_id):
     template = ChecklistTemplate.query.get_or_404(template_id)
 
     try:
-        # Delete associated template items first (should happen automatically with cascade)
+        # Delete associated template items first
+        TemplateItem.query.filter_by(template_id=template_id).delete()
+        
+        # Delete associated categories
+        ChecklistCategory.query.filter_by(template_id=template_id).delete()
+        
+        # Finally delete the template
         db.session.delete(template)
         db.session.commit()
         return jsonify({"status": "success"})
     except Exception as e:
         db.session.rollback()
         return jsonify({"status": "error", "message": str(e)}), 500
+
+
+
+@main.route("/rename-template/<int:template_id>", methods=["POST"])
+@login_required
+def rename_template(template_id):
+    if not current_user.is_admin:
+        return jsonify({"status": "error", "message": "Access denied"}), 403
+        
+    template = ChecklistTemplate.query.get_or_404(template_id)
+    new_name = request.json.get('name')
+    
+    if not new_name:
+        return jsonify({"status": "error", "message": "Name is required"}), 400
+        
+    try:
+        template.name = new_name
+        db.session.commit()
+        return jsonify({"status": "success"})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
 
 @main.route('/add-category/<int:template_id>', methods=['POST'])
 @login_required
@@ -1085,34 +1115,49 @@ def add_template_to_client(client_id):
             flash(f"Template with ID {template_id} not found")
             return redirect(url_for("main.client_checklist", client_id=client_id))
             
-        # Get template items and categories
-        categories = ChecklistCategory.query.filter_by(template_id=template.id).all()
-        if not categories:
+        # Get template categories
+        template_categories = ChecklistCategory.query.filter_by(template_id=template.id).all()
+        if not template_categories:
             flash(f"No categories found for template '{template.name}'")
             return redirect(url_for("main.client_checklist", client_id=client_id))
             
         items_added = 0
         duplicates_prevented = 0
         
-        for category in categories:
+        for template_category in template_categories:
+            # Check for existing category with same name (case-insensitive)
+            existing_category = ChecklistCategory.query.join(
+                ChecklistItem,
+                ChecklistCategory.id == ChecklistItem.category_id
+            ).filter(
+                ChecklistItem.client_id == client_id,
+                func.lower(ChecklistCategory.name) == func.lower(template_category.name)
+            ).first()
+            
+            # If no existing category found, create new one
+            if not existing_category:
+                existing_category = template_category
+            
+            # Get template items for this category
             template_items = TemplateItem.query.filter_by(
                 template_id=template.id,
-                category_id=category.id
+                category_id=template_category.id
             ).all()
             
-            for item in template_items:
-                # Check for duplicate
-                existing = ChecklistItem.query.filter_by(
-                    client_id=client_id,
-                    category_id=category.id,
-                    description=item.description
+            # Add items to the category (existing or new)
+            for template_item in template_items:
+                # Check for duplicate items in this category (case-insensitive)
+                existing_item = ChecklistItem.query.filter(
+                    ChecklistItem.client_id == client_id,
+                    ChecklistItem.category_id == existing_category.id,
+                    func.lower(ChecklistItem.description) == func.lower(template_item.description)
                 ).first()
                 
-                if not existing:
+                if not existing_item:
                     new_item = ChecklistItem(
                         client_id=client_id,
-                        description=item.description,
-                        category_id=category.id
+                        description=template_item.description,
+                        category_id=existing_category.id
                     )
                     db.session.add(new_item)
                     items_added += 1
