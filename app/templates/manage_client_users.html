@@ -1,0 +1,163 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="manage-users-container">
+    <h1>Manage Users - {{ client.name }}</h1>
+
+    <div class="add-user-section">
+        <h2>Add New User</h2>
+        <form id="addUserForm" class="add-user-form">
+            <div class="form-group">
+                <input type="text" 
+                       id="userName" 
+                       placeholder="Enter user name" 
+                       required 
+                       class="form-control dark-input">
+                <button type="submit" class="button">Add User</button>
+            </div>
+        </form>
+    </div>
+
+    <div class="users-list-section">
+        <h2>Current Users</h2>
+        <div class="users-list" id="usersList">
+            {% for user in client.users %}
+            <div class="user-item" data-user-id="{{ user.id }}">
+                <span class="user-name">{{ user.name }}</span>
+                <button onclick="deleteUser({{ user.id }})" class="button delete-btn">Remove</button>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="back-link">
+        <a href="{{ url_for('main.client_checklist', client_id=client.id) }}" class="button secondary">Back to Checklist</a>
+    </div>
+</div>
+
+<style>
+.manage-users-container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+.add-user-section {
+    background-color: var(--dark-card-bg);
+    padding: 20px;
+    border-radius: 5px;
+    margin-bottom: 20px;
+}
+
+.add-user-form {
+    display: flex;
+    gap: 10px;
+}
+
+.add-user-form input {
+    flex: 1;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
+.users-list-section {
+    background-color: var(--dark-card-bg);
+    padding: 20px;
+    border-radius: 5px;
+}
+
+.user-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px;
+    border-bottom: 1px solid #ddd;
+}
+
+.user-item:last-child {
+    border-bottom: none;
+}
+
+.delete-btn {
+    background-color: #dc3545;
+}
+
+.delete-btn:hover {
+    background-color: #c82333;
+}
+
+.dark-input {
+    background-color: var(--dark-input-bg) !important;
+    color: var(--dark-text) !important;
+    border: 1px solid var(--dark-border) !important;
+}
+</style>
+
+<script>
+document.getElementById('addUserForm').onsubmit = async function(e) {
+    e.preventDefault();
+    const userName = document.getElementById('userName').value.trim();
+    
+    try {
+        console.log('Submitting user:', userName); // Debug log
+        const response = await fetch("{{ url_for('main.add_client_user', client_id=client.id) }}", {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: JSON.stringify({ name: userName })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            // Add new user to the list
+            const usersList = document.getElementById('usersList');
+            const userItem = document.createElement('div');
+            userItem.className = 'user-item';
+            userItem.dataset.userId = data.user.id;
+            userItem.innerHTML = `
+                <span class="user-name">${data.user.name}</span>
+                <button onclick="deleteUser(${data.user.id})" class="button delete-btn">Remove</button>
+            `;
+            usersList.appendChild(userItem);
+            
+            // Clear input
+            document.getElementById('userName').value = '';
+        } else {
+            alert(data.error || 'Error adding user');
+        }
+    } catch (error) {
+        console.error('Error:', error); // Debug log
+        alert('Error adding user');
+    }
+};
+
+async function deleteUser(userId) {
+    if (!confirm('Are you sure you want to remove this user?')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`{{ url_for('main.delete_client_user', client_id=client.id, user_id=0) }}`.replace('0', userId), {
+            method: 'DELETE'
+        });
+        
+        if (response.ok) {
+            // Remove user from the list
+            const userItem = document.querySelector(`.user-item[data-user-id="${userId}"]`);
+            if (userItem) {
+                userItem.remove();
+            }
+        } else {
+            const data = await response.json();
+            alert(data.error || 'Error removing user');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Error removing user');
+    }
+}
+</script>
+{% endblock %}

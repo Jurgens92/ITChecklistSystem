@@ -13,6 +13,23 @@
         {% for category, items in items_by_category.items() %}
         <div class="category-section">
             <h2>{{ category.name }}</h2>
+            {% if category.is_per_user %}
+                <div class="selected-users-info">
+                    <h3>Selected Users:</h3>
+                    {% if user_checklists %}
+                        <ul>
+                        {% for user_checklist in user_checklists %}
+                            {% if user_checklist.client_user %}
+                                <li>{{ user_checklist.client_user.name }}</li>
+                            {% endif %}
+                        {% endfor %}
+                        </ul>
+                    {% else %}
+                        <p>No users were selected for this category</p>
+                    {% endif %}
+                </div>
+            {% endif %}
+
             <div class="items-list">
                 {% for item in items %}
                 <div class="checklist-item {% if item.completed %}completed{% endif %}">
