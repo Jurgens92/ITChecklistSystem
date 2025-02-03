@@ -1288,10 +1288,20 @@ def edit_client_structure(client_id):
                 is_per_user = category_data.get('is_per_user', False)
                 items = category_data.get('items', [])
                 
-                # Update category per_user status
-                category = ChecklistCategory.query.get(category_id)
-                if category:
-                    category.is_per_user = is_per_user
+                # Update or create client category settings
+                settings = ClientCategorySettings.query.filter_by(
+                    client_id=client_id,
+                    category_id=category_id
+                ).first()
+                
+                if not settings:
+                    settings = ClientCategorySettings(
+                        client_id=client_id,
+                        category_id=category_id
+                    )
+                    db.session.add(settings)
+                
+                settings.is_per_user = is_per_user
                 
                 if category_id and items:
                     for item in items:
@@ -1332,6 +1342,12 @@ def edit_client_structure(client_id):
             )
         )
     ).all()
+
+    # Get client-specific category settings
+    category_settings = {
+        setting.category_id: setting.is_per_user 
+        for setting in ClientCategorySettings.query.filter_by(client_id=client_id).all()
+    }
     
     for category in categories:
         items = ChecklistItem.query.filter_by(
@@ -1341,6 +1357,8 @@ def edit_client_structure(client_id):
         
         # Only include categories that have items or are custom to this client
         if items or category.client_id == client_id:
+            # Set is_per_user based on client-specific settings
+            category.is_per_user = category_settings.get(category.id, False)
             items_by_category[category] = items
     
     return render_template(
