@@ -15,6 +15,7 @@
                             <input type="checkbox" 
                                    class="per-user-checkbox" 
                                    {% if category.is_per_user %}checked{% endif %}
+                                   data-category-id="{{ category.id }}"
                                    onchange="togglePerUser(this, {{ category.id }})">
                             Per User Category
                         </label>
@@ -64,7 +65,7 @@ async function togglePerUser(checkbox, categoryId) {
             },
             body: JSON.stringify({
                 is_per_user: checkbox.checked,
-                client_id: {{ client.id }}  // Add client ID
+                client_id: {{ client.id }}  // This is what was missing
             })
         });
 
@@ -188,7 +189,16 @@ function addCustomCategory() {
             newCategory.dataset.categoryId = data.category.id;
             newCategory.innerHTML = `
                 <div class="category-header">
-                    <h3>${data.category.name}</h3>
+                    <div class="category-title-group">
+                        <h3>${data.category.name}</h3>
+                        <label class="per-user-toggle">
+                            <input type="checkbox" 
+                                   class="per-user-checkbox" 
+                                   data-category-id="${data.category.id}"
+                                   onchange="togglePerUser(this, ${data.category.id})">
+                            Per User Category
+                        </label>
+                    </div>
                     <button type="button" class="remove-category-btn" onclick="removeCategory(this)">Remove Category</button>
                 </div>
                 <div class="items-list"></div>
