@@ -63,7 +63,8 @@ async function togglePerUser(checkbox, categoryId) {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                is_per_user: checkbox.checked
+                is_per_user: checkbox.checked,
+                client_id: {{ client.id }}  // Add client ID
             })
         });
 
