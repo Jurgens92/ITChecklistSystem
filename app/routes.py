@@ -360,7 +360,7 @@ def submit_checklist():
         )
         db.session.add(record)
         db.session.flush()
-        
+        #
         # Add notes if provided
         if notes_text:
             notes = ChecklistNotes(
