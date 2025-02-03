@@ -151,3 +151,14 @@ class UserChecklist(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     client_user = db.relationship('ClientUser', backref='user_checklists')
 
+class ClientCategorySettings(db.Model):
+    __tablename__ = 'client_category_settings'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    client_id = db.Column(db.Integer, db.ForeignKey('client.id', ondelete='CASCADE'))
+    category_id = db.Column(db.Integer, db.ForeignKey('checklist_category.id', ondelete='CASCADE'))
+    is_per_user = db.Column(db.Boolean, default=False)
+    
+    __table_args__ = (
+        db.UniqueConstraint('client_id', 'category_id', name='uix_client_category'),
+    )

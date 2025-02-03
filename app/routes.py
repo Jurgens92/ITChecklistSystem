@@ -15,7 +15,8 @@ from app.models import (
     Settings,
     Role,
     ClientUser,
-    UserChecklist
+    UserChecklist,
+    ClientCategorySettings
     )
 
 import pytz
@@ -298,12 +299,10 @@ def logout():
 @login_required
 def client_checklist(client_id):
     client = Client.query.get_or_404(client_id)
-    
-    # Get all available templates
     templates = ChecklistTemplate.query.all()
-    
-    # Get all items for this client
     items_by_category = {}
+    
+    # Get all categories for this client
     categories = ChecklistCategory.query.all()
     
     for category in categories:
@@ -312,15 +311,22 @@ def client_checklist(client_id):
             category_id=category.id
         ).all()
         
-        if items:  # Only add categories that have items
-            items_by_category[category] = items
+        if items:
+            # Get client-specific category settings
+            settings = ClientCategorySettings.query.filter_by(
+                client_id=client_id,
+                category_id=category.id
+            ).first()
+            
+            # Create a copy of the category with client-specific settings
+            category_copy = type('CategoryCopy', (), {
+                'id': category.id,
+                'name': category.name,
+                'is_per_user': settings.is_per_user if settings else False
+            })
+            
+            items_by_category[category_copy] = items
 
-    # Debug information
-    print(f"DEBUG: Client ID: {client_id}")
-    print(f"DEBUG: Number of templates: {len(templates)}")
-    for template in templates:
-        print(f"DEBUG: Template: {template.name} (ID: {template.id})")
-        
     return render_template(
         "checklist.html",
         client=client,
@@ -1522,9 +1528,27 @@ def toggle_category_per_user(category_id):
         return jsonify({'error': 'Permission denied'}), 403
 
     try:
-        category = ChecklistCategory.query.get_or_404(category_id)
         data = request.get_json()
-        category.is_per_user = data.get('is_per_user', False)
+        client_id = data.get('client_id')
+        is_per_user = data.get('is_per_user', False)
+
+        if not client_id:
+            return jsonify({'error': 'Client ID is required'}), 400
+
+        # Get or create client category settings
+        settings = ClientCategorySettings.query.filter_by(
+            client_id=client_id,
+            category_id=category_id
+        ).first()
+
+        if not settings:
+            settings = ClientCategorySettings(
+                client_id=client_id,
+                category_id=category_id
+            )
+            db.session.add(settings)
+
+        settings.is_per_user = is_per_user
         db.session.commit()
         return jsonify({'status': 'success'})
     except Exception as e:
