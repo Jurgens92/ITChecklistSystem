@@ -13,8 +13,11 @@ from app.models import (
     ChecklistCategory,
     ChecklistNotes,
     Settings,
-    Role
-)
+    Role,
+    ClientUser,
+    UserChecklist
+    )
+
 import pytz
 from app import db
 from sqlalchemy import func, text
@@ -22,12 +25,132 @@ from datetime import datetime, timedelta
 
 from io import BytesIO
 from reportlab.lib import colors
+from reportlab.lib.units import mm
 from reportlab.lib.pagesizes import letter, landscape
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.lib.pagesizes import A4
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
 from reportlab.lib.enums import TA_LEFT, TA_CENTER
 
+def create_pdf_styles():
+    """Create and return custom PDF styles"""
+    styles = getSampleStyleSheet()
+    
+    title_style = ParagraphStyle(
+        'CustomTitle',
+        parent=styles['Heading1'],
+        fontSize=16,
+        spaceAfter=30
+    )
+    
+    heading2_style = ParagraphStyle(
+        'CustomHeading2',
+        parent=styles['Heading2'],
+        fontSize=14,
+        spaceAfter=12
+    )
+    
+    normal_style = ParagraphStyle(
+        'CustomNormal',
+        parent=styles['Normal'],
+        fontSize=10,
+        leading=14
+    )
+    
+    return {
+        'title': title_style,
+        'heading2': heading2_style,
+        'normal': normal_style
+    }
+
+def get_category_data(record_id):
+    """Get completed items and user data organized by category"""
+    completed_items = db.session.query(
+        CompletedItem, ChecklistItem, ChecklistCategory
+    ).join(
+        ChecklistItem, CompletedItem.checklist_item_id == ChecklistItem.id
+    ).join(
+        ChecklistCategory, ChecklistItem.category_id == ChecklistCategory.id
+    ).filter(
+        CompletedItem.record_id == record_id
+    ).all()
+
+    categories_data = {}
+    for completed_item, checklist_item, category in completed_items:
+        if category not in categories_data:
+            categories_data[category] = {
+                'items': [],
+                'users': []
+            }
+        if completed_item.completed:
+            categories_data[category]['items'].append(checklist_item.description)
+
+        # Add user information if category is per-user
+        if category.is_per_user:
+            user_checklists = UserChecklist.query.filter_by(
+                record_id=record_id,
+                category_id=category.id
+            ).all()
+            categories_data[category]['users'] = [
+                uc.client_user.name for uc in user_checklists if uc.client_user
+            ]
+    
+    return categories_data
+
+def add_record_to_pdf(elements, record, styles, is_first_record=False):
+    """Add a single record to the PDF elements list"""
+    # Add page break before record (except for the first record)
+    if not is_first_record:
+        elements.append(PageBreak())
+    
+    # Record header with separate lines for date, client, and user
+    elements.append(Paragraph(
+        f"Date: {record.date_performed.strftime('%Y-%m-%d %H:%M')}",
+        styles['heading2']
+    ))
+    elements.append(Paragraph(
+        f"Client: {record.client.name}",
+        styles['heading2']
+    ))
+    elements.append(Paragraph(
+        f"Performed by: {record.user.username}",
+        styles['heading2']
+    ))
+    
+    elements.append(Spacer(1, 12))  # Add some space after the header
+    
+    # Get category data
+    categories_data = get_category_data(record.id)
+    
+    # Add categories and items
+    for category, data in categories_data.items():
+        elements.append(Paragraph(category.name, styles['heading2']))
+        
+        # Add selected users if any
+        if data['users']:
+            elements.append(Paragraph(
+                "Selected Users: " + ", ".join(data['users']),
+                styles['normal']
+            ))
+            elements.append(Spacer(1, 6))
+
+        # Add items
+        for item in data['items']:
+            elements.append(Paragraph(f"• {item}", styles['normal']))
+        elements.append(Spacer(1, 12))
+
+    # Add notes if any
+    notes = ChecklistNotes.query.filter_by(checklist_record_id=record.id).first()
+    if notes and notes.note_text:
+        elements.append(Paragraph("Notes:", styles['heading2']))
+        note_paragraphs = notes.note_text.split('\n')
+        for para in note_paragraphs:
+            if para.strip():
+                elements.append(Paragraph(para, styles['normal']))
+        elements.append(Spacer(1, 12))
+
+    elements.append(Spacer(1, 20))  # Add space between records
 
 def get_local_time():
     settings = Settings.query.first()
@@ -209,15 +332,19 @@ def client_checklist(client_id):
 @login_required
 def submit_checklist():
     try:
-        client_id = request.form.get("client_id")
-        if not client_id:
-            raise ValueError("No client specified")
-
-        completed_item_ids = request.form.getlist("items")
-        notes_text = request.form.get("notes", "").strip()
+        data = request.get_json()
+        current_app.logger.info(f"Received data: {data}")
         
-        # Get client
-        client = Client.query.get_or_404(client_id)
+        if not data:
+            raise ValueError("No data provided")
+
+        client_id = data.get('client_id')
+        if not client_id:
+            raise ValueError("Client ID is required")
+        
+        completed_item_ids = data.get('items', [])
+        notes_text = data.get('notes', '').strip()
+        per_user_data = data.get('per_user_data', {})
         
         # Create record
         record = ChecklistRecord(
@@ -237,21 +364,13 @@ def submit_checklist():
             )
             db.session.add(notes)
 
-        # Get the categories in order of how they appear in the checklist
-        categories = db.session.query(ChecklistCategory)\
-            .join(ChecklistItem)\
-            .filter(ChecklistItem.client_id == client_id)\
-            .order_by(ChecklistCategory.id)\
-            .distinct()\
-            .all()
+        # Process completed items and user data
+        summary_data = {}
+        categories = db.session.query(ChecklistCategory).join(
+            ChecklistItem, ChecklistItem.category_id == ChecklistCategory.id
+        ).filter(ChecklistItem.client_id == client_id).distinct().all()
 
-        # Build summary data using OrderedDict to preserve order
-        from collections import OrderedDict
-        summary_data = OrderedDict()
-        
-        # Process each category in order
         for category in categories:
-            # Get items for this category
             items = ChecklistItem.query.filter_by(
                 client_id=client_id,
                 category_id=category.id
@@ -259,23 +378,40 @@ def submit_checklist():
             
             completed_items = []
             for item in items:
-                completed = str(item.id) in completed_item_ids
+                is_completed = str(item.id) in completed_item_ids
                 
                 # Create CompletedItem record
                 completed_item = CompletedItem(
                     record_id=record.id,
                     checklist_item_id=item.id,
-                    completed=completed,
-                    completed_by=current_user.id if completed else None
+                    completed=is_completed,
+                    completed_by=current_user.id if is_completed else None
                 )
                 db.session.add(completed_item)
                 
-                if completed:
+                if is_completed:
                     completed_items.append(item.description)
             
-            # Only add to summary if there are completed items
-            if completed_items:
-                summary_data[category.name] = completed_items
+            # Only add to summary if there are completed items or selected users
+            if completed_items or (category.is_per_user and str(category.id) in per_user_data):
+                summary_data[category.name] = {
+                    'items': completed_items,
+                    'users': []
+                }
+                
+                # Handle per-user data for this category
+                if category.is_per_user and str(category.id) in per_user_data:
+                    user_ids = per_user_data[str(category.id)]
+                    for user_id in user_ids:
+                        user = ClientUser.query.get(user_id)
+                        if user:
+                            summary_data[category.name]['users'].append(user.name)
+                            user_checklist = UserChecklist(
+                                record_id=record.id,
+                                category_id=category.id,
+                                client_user_id=user_id
+                            )
+                            db.session.add(user_checklist)
         
         db.session.commit()
         
@@ -291,7 +427,7 @@ def submit_checklist():
         current_app.logger.error(f"Error in submit_checklist: {str(e)}")
         return jsonify({
             "status": "error",
-            "message": "An error occurred while submitting the checklist."
+            "message": str(e)
         }), 500
 
 @main.route("/checklist-summary")
@@ -459,7 +595,7 @@ def client_report(client_id):
 @main.route("/export-user-report/<int:user_id>")
 @login_required
 def export_user_report(user_id):
-    if not current_user.is_admin:
+    if not (current_user.is_admin or user_id == current_user.id):
         flash("Access denied")
         return redirect(url_for("main.dashboard"))
 
@@ -484,7 +620,6 @@ def export_user_report(user_id):
         
         if end_date:
             try:
-                # Add one day to include the end date fully
                 end = datetime.strptime(end_date, '%Y-%m-%d') + timedelta(days=1)
                 query = query.filter(ChecklistRecord.date_performed < end)
             except ValueError:
@@ -497,93 +632,35 @@ def export_user_report(user_id):
         buffer = BytesIO()
         doc = SimpleDocTemplate(
             buffer,
-            pagesize=letter,
-            rightMargin=36,
-            leftMargin=36,
-            topMargin=36,
-            bottomMargin=36
+            pagesize=A4,
+            rightMargin=20*mm,
+            leftMargin=20*mm,
+            topMargin=20*mm,
+            bottomMargin=20*mm
         )
 
-        elements = []
-        styles = getSampleStyleSheet()
+        # Get styles
+        styles = create_pdf_styles()
         
-        # Add title with date range if specified
+        # Build document content
+        elements = []
+        
+        # Add title
         title = f"User Report - {user.username}"
         if start_date and end_date:
             title += f" ({start_date} to {end_date})"
-        elements.append(Paragraph(title, styles['Heading1']))
-        elements.append(Spacer(1, 20))
+        elements.append(Paragraph(title, styles['title']))
         
         # Add report generation date
         report_date = datetime.now().strftime("%Y-%m-%d %H:%M")
-        elements.append(Paragraph(f"Generated: {report_date}", styles['Normal']))
+        elements.append(Paragraph(f"Generated: {report_date}", styles['normal']))
         elements.append(Spacer(1, 20))
 
-        # Prepare table data
-        table_data = [['Date', 'Client', 'Category', 'Item', 'Status']]
-        
-        for record in records:
-            # Get completed items for this record
-            completed_items = CompletedItem.query.filter_by(record_id=record.id).all()
-            
-            # Get notes for this record
-            notes = ChecklistNotes.query.filter_by(checklist_record_id=record.id).first()
-            
-            # Add items
-            for completed_item in completed_items:
-                checklist_item = ChecklistItem.query.get(completed_item.checklist_item_id)
-                if checklist_item:
-                    category = ChecklistCategory.query.get(checklist_item.category_id)
-                    category_name = category.name if category else "No Category"
-                    
-                    table_data.append([
-                        record.date_performed.strftime('%Y-%m-%d %H:%M'),
-                        record.client.name,
-                        category_name,
-                        Paragraph(checklist_item.description, styles['Normal']),
-                        'Completed' if completed_item.completed else 'Not Completed'
-                    ])
-            
-            # If there are notes, add them after the items
-            if notes and notes.note_text:
-                table_data.append(['', '', '', '', ''])  # Empty row for spacing
-                note_header = f"Notes ({record.date_performed.strftime('%Y-%m-%d %H:%M')}):"
-                table_data.append([Paragraph(note_header, styles['Heading4']), '', '', '', ''])
-                table_data.append([Paragraph(notes.note_text, styles['Normal']), '', '', '', ''])
-                table_data.append(['', '', '', '', ''])  # Empty row for spacing
+        # Add each record
+        for index, record in enumerate(records):
+            add_record_to_pdf(elements, record, styles, is_first_record=(index == 0))
 
-        if len(table_data) > 1:
-            # Calculate column widths
-            page_width = letter[0] - 72
-            col_widths = [
-                page_width * 0.15,  # Date
-                page_width * 0.15,  # Client
-                page_width * 0.15,  # Category
-                page_width * 0.40,  # Item
-                page_width * 0.15   # Status
-            ]
-
-            table = Table(table_data, colWidths=col_widths, repeatRows=1)
-            table.setStyle(TableStyle([
-                ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
-                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                ('FONTSIZE', (0, 0), (-1, 0), 12),
-                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-                ('BACKGROUND', (0, 1), (-1, -1), colors.white),
-                ('TEXTCOLOR', (0, 1), (-1, -1), colors.black),
-                ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-                ('FONTSIZE', (0, 1), (-1, -1), 10),
-                ('GRID', (0, 0), (-1, 0), 1, colors.black),
-                ('LINEBELOW', (0, 0), (-1, -1), 0.25, colors.grey),
-                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-                ('SPAN', (0, -1), (-1, -1)),
-            ]))
-            elements.append(table)
-        else:
-            elements.append(Paragraph("No records found for this user", styles['Normal']))
-
+        # Build PDF
         doc.build(elements)
         buffer.seek(0)
         
@@ -605,6 +682,27 @@ def export_user_report(user_id):
         flash("Error generating PDF report")
         return redirect(url_for('main.user_report', user_id=user_id))
 
+def add_user_info_to_pdf(elements, category, record_id, styles):
+    user_checklists = UserChecklist.query.filter_by(
+        record_id=record_id,
+        category_id=category.id
+    ).all()
+    
+    if user_checklists:
+        elements.append(Paragraph("Selected Users:", styles['Heading4']))
+        for user_checklist in user_checklists:
+            elements.append(Paragraph(
+                f"- {user_checklist.client_user.name}",
+                styles['Normal']
+            ))
+        elements.append(Spacer(1, 10))
+
+@main.route("/client/<int:client_id>/users")  # Changed the route pattern
+@login_required
+def manage_client_users(client_id):
+    client = Client.query.get_or_404(client_id)
+    return render_template("manage_client_users.html", client=client)
+
 @main.route("/export-client-report/<int:client_id>")
 @login_required
 def export_client_report(client_id):
@@ -613,7 +711,10 @@ def export_client_report(client_id):
         return redirect(url_for("main.dashboard"))
 
     try:
+        current_app.logger.info("Starting PDF export process")
+        
         client = Client.query.get_or_404(client_id)
+        current_app.logger.info(f"Found client: {client.name}")
         
         # Get date range filters
         start_date = request.args.get('start_date')
@@ -640,99 +741,56 @@ def export_client_report(client_id):
                 return redirect(url_for('main.client_report', client_id=client_id))
         
         records = query.order_by(ChecklistRecord.date_performed.desc()).all()
+        current_app.logger.info(f"Found {len(records)} records")
 
         # Create PDF
         buffer = BytesIO()
+        current_app.logger.info("Created BytesIO buffer")
+        
         doc = SimpleDocTemplate(
             buffer,
-            pagesize=letter,
-            rightMargin=36,
-            leftMargin=36,
-            topMargin=36,
-            bottomMargin=36
+            pagesize=A4,
+            rightMargin=20*mm,
+            leftMargin=20*mm,
+            topMargin=20*mm,
+            bottomMargin=20*mm
         )
+        current_app.logger.info("Created SimpleDocTemplate")
 
-        elements = []
-        styles = getSampleStyleSheet()
+        # Get styles
+        styles = create_pdf_styles()
+        current_app.logger.info("Created PDF styles")
         
-        # Add title with date range if specified
+        # Build document content
+        elements = []
+        
+        # Add title
         title = f"Checklist Report - {client.name}"
         if start_date and end_date:
             title += f" ({start_date} to {end_date})"
-        elements.append(Paragraph(title, styles['Heading1']))
-        elements.append(Spacer(1, 20))
+        elements.append(Paragraph(title, styles['title']))
         
         # Add report generation date
         report_date = datetime.now().strftime("%Y-%m-%d %H:%M")
-        elements.append(Paragraph(f"Generated: {report_date}", styles['Normal']))
+        elements.append(Paragraph(f"Generated: {report_date}", styles['normal']))
         elements.append(Spacer(1, 20))
 
-        # Prepare table data
-        table_data = [['Date', 'Performed By', 'Category', 'Item', 'Status']]
-        
-        for record in records:
-            # Get completed items for this record
-            completed_items = CompletedItem.query.filter_by(record_id=record.id).all()
-            
-            # Get notes for this record
-            notes = ChecklistNotes.query.filter_by(checklist_record_id=record.id).first()
-            
-            # Add items
-            for completed_item in completed_items:
-                checklist_item = ChecklistItem.query.get(completed_item.checklist_item_id)
-                if checklist_item:
-                    category = ChecklistCategory.query.get(checklist_item.category_id)
-                    category_name = category.name if category else "No Category"
-                    
-                    table_data.append([
-                        record.date_performed.strftime('%Y-%m-%d %H:%M'),
-                        record.user.username,
-                        category_name,
-                        Paragraph(checklist_item.description, styles['Normal']),
-                        'Completed' if completed_item.completed else 'Not Completed'
-                    ])
-            
-            # If there are notes, add them after the items
-            if notes and notes.note_text:
-                table_data.append(['', '', '', '', ''])  # Empty row for spacing
-                note_header = f"Notes ({record.date_performed.strftime('%Y-%m-%d %H:%M')}):"
-                table_data.append([Paragraph(note_header, styles['Heading4']), '', '', '', ''])
-                table_data.append([Paragraph(notes.note_text, styles['Normal']), '', '', '', ''])
-                table_data.append(['', '', '', '', ''])  # Empty row for spacing
+        current_app.logger.info("Starting to process records")
+        # Add each record
+        for index, record in enumerate(records):
+            try:
+                current_app.logger.info(f"Processing record {index + 1} of {len(records)}")
+                add_record_to_pdf(elements, record, styles, is_first_record=(index == 0))
+                current_app.logger.info(f"Successfully processed record {index + 1}")
+            except Exception as record_error:
+                current_app.logger.error(f"Error processing record {index + 1}: {str(record_error)}")
+                raise
 
-        if len(table_data) > 1:
-            # Calculate column widths
-            page_width = letter[0] - 72
-            col_widths = [
-                page_width * 0.15,  # Date
-                page_width * 0.15,  # Performed by
-                page_width * 0.15,  # Category
-                page_width * 0.40,  # Item
-                page_width * 0.15   # Status
-            ]
-
-            table = Table(table_data, colWidths=col_widths, repeatRows=1)
-            table.setStyle(TableStyle([
-                ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
-                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                ('FONTSIZE', (0, 0), (-1, 0), 12),
-                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-                ('BACKGROUND', (0, 1), (-1, -1), colors.white),
-                ('TEXTCOLOR', (0, 1), (-1, -1), colors.black),
-                ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-                ('FONTSIZE', (0, 1), (-1, -1), 10),
-                ('GRID', (0, 0), (-1, 0), 1, colors.black),
-                ('LINEBELOW', (0, 0), (-1, -1), 0.25, colors.grey),
-                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-                ('SPAN', (0, -1), (-1, -1)),
-            ]))
-            elements.append(table)
-        else:
-            elements.append(Paragraph("No records found for this client", styles['Normal']))
-
+        current_app.logger.info("Building PDF")
+        # Build PDF
         doc.build(elements)
+        current_app.logger.info("PDF built successfully")
+        
         buffer.seek(0)
         
         # Generate filename with date range if specified
@@ -741,6 +799,7 @@ def export_client_report(client_id):
             filename += f"_{start_date}_to_{end_date}"
         filename += ".pdf"
         
+        current_app.logger.info("Returning PDF file")
         return send_file(
             buffer,
             mimetype='application/pdf',
@@ -749,9 +808,13 @@ def export_client_report(client_id):
         )
 
     except Exception as e:
+        import traceback
+        error_details = traceback.format_exc()
         current_app.logger.error(f"Error generating PDF report: {str(e)}")
+        current_app.logger.error(f"Traceback: {error_details}")
         flash("Error generating PDF report")
         return redirect(url_for('main.client_report', client_id=client_id))
+
 
 @main.route("/manage-clients")
 @login_required
@@ -1079,6 +1142,8 @@ def edit_template(template_id):
     items_by_category = {}
     
     for category in categories:
+        if category.is_per_user:
+            add_user_info_to_pdf(elements, category, record.id, styles)
         items = TemplateItem.query.filter_by(
             template_id=template_id,
             category_id=category.id
@@ -1198,7 +1263,7 @@ def delete_client(client_id):
 @main.route("/edit-client-structure/<int:client_id>", methods=["GET", "POST"])
 @login_required
 def edit_client_structure(client_id):
-        
+    # Get the client first
     client = Client.query.get_or_404(client_id)
     
     if request.method == "POST":
@@ -1208,35 +1273,19 @@ def edit_client_structure(client_id):
             if not data:
                 return jsonify({"status": "error", "message": "No data provided"}), 400
             
-            # Check for duplicates across all categories
-            all_items = []
-            for category_data in data.get('categories', []):
-                category_id = category_data.get('id')
-                items = category_data.get('items', [])
-                
-                # Create a list of lowercase descriptions for case-insensitive comparison
-                category_items = [item['description'].lower().strip() for item in items if 'description' in item]
-                
-                # Check for duplicates within the category
-                duplicates = [item for item in category_items if category_items.count(item) > 1]
-                if duplicates:
-                    category = ChecklistCategory.query.get(category_id)
-                    return jsonify({
-                        "status": "error",
-                        "message": f"Duplicate items found in category {category.name}: {', '.join(set(duplicates))}"
-                    }), 400
-                
-                all_items.extend(category_items)
-            
             # Delete existing items for this client
             ChecklistItem.query.filter_by(client_id=client_id).delete()
             
             # Add new/updated items
             for category_data in data.get('categories', []):
                 category_id = category_data.get('id')
+                is_per_user = category_data.get('is_per_user', False)
                 items = category_data.get('items', [])
                 
-                print(f"Processing category {category_id} with {len(items)} items")  # Debug log
+                # Update category per_user status
+                category = ChecklistCategory.query.get(category_id)
+                if category:
+                    category.is_per_user = is_per_user
                 
                 if category_id and items:
                     for item in items:
@@ -1253,9 +1302,8 @@ def edit_client_structure(client_id):
             
         except Exception as e:
             db.session.rollback()
-            print(f"Error in edit_client_structure: {str(e)}")  # Debug log
             return jsonify({"status": "error", "message": str(e)}), 500
-    
+
     # GET request handling
     items_by_category = {}
     
@@ -1368,12 +1416,16 @@ def checklist_detail(record_id):
     # Get the notes
     notes = ChecklistNotes.query.filter_by(checklist_record_id=record_id).first()
     
+    # Get user checklists
+    user_checklists = UserChecklist.query.filter_by(record_id=record_id).all()
+    
     return render_template(
         'checklist_detail.html',
         record=record,
         convert_to_local_time=convert_to_local_time,
         items_by_category=items_by_category,
-        notes=notes
+        notes=notes,
+        user_checklists=user_checklists
     )
 
 @main.route("/change-password", methods=["GET", "POST"])
@@ -1402,3 +1454,80 @@ def change_password():
         return redirect(url_for("main.dashboard"))
         
     return render_template("change_password.html")
+
+@main.route("/add-client-user/<int:client_id>", methods=["POST"])
+@login_required
+def add_client_user(client_id):
+    try:
+        client = Client.query.get_or_404(client_id)
+        data = request.get_json()
+        
+        if not data or 'name' not in data:
+            return jsonify({'error': 'Name is required'}), 400
+            
+        name = data['name'].strip()
+        
+        if not name:
+            return jsonify({'error': 'Name cannot be empty'}), 400
+            
+        # Check for duplicate name
+        existing_user = ClientUser.query.filter_by(
+            client_id=client_id,
+            name=name
+        ).first()
+        
+        if existing_user:
+            return jsonify({'error': 'A user with this name already exists'}), 400
+            
+        # Create new user
+        new_user = ClientUser(
+            name=name,
+            client_id=client_id
+        )
+        db.session.add(new_user)
+        db.session.commit()
+        
+        return jsonify({
+            'status': 'success',
+            'user': {
+                'id': new_user.id,
+                'name': new_user.name
+            }
+        })
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error in add_client_user: {str(e)}") # Debug log
+        return jsonify({'error': str(e)}), 500
+
+@main.route("/client/<int:client_id>/users/<int:user_id>", methods=["DELETE"])
+@login_required
+def delete_client_user(client_id, user_id):
+    user = ClientUser.query.filter_by(
+        id=user_id,
+        client_id=client_id
+    ).first_or_404()
+    
+    try:
+        db.session.delete(user)
+        db.session.commit()
+        return jsonify({'status': 'success'})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@main.route("/toggle-category-per-user/<int:category_id>", methods=["POST"])
+@login_required
+def toggle_category_per_user(category_id):
+    if not current_user.is_admin and not current_user.has_permission('edit_checklist_structure'):
+        return jsonify({'error': 'Permission denied'}), 403
+
+    try:
+        category = ChecklistCategory.query.get_or_404(category_id)
+        data = request.get_json()
+        category.is_per_user = data.get('is_per_user', False)
+        db.session.commit()
+        return jsonify({'status': 'success'})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+

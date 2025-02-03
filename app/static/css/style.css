@@ -330,3 +330,25 @@ input, select, textarea {
 .template-card, .client-card {
     transition: background-color 0.3s, border-color 0.3s;
 }
+
+.selected-users-info {
+    margin: 10px 0;
+    padding: 10px;
+    background-color: var(--dark-card-bg);
+    border: 1px solid var(--dark-border);
+    border-radius: 4px;
+}
+
+.selected-users-info h3 {
+    font-size: 1em;
+    margin-bottom: 8px;
+}
+
+.selected-users-info ul {
+    margin: 0;
+    padding-left: 20px;
+}
+
+.selected-users-info li {
+    margin: 3px 0;
+}

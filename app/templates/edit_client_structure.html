@@ -9,7 +9,16 @@
             {% for category in categories %}
             <div class="category-section" data-category-id="{{ category.id }}">
                 <div class="category-header">
-                    <h3>{{ category.name }}</h3>
+                    <div class="category-title-group">
+                        <h3>{{ category.name }}</h3>
+                        <label class="per-user-toggle">
+                            <input type="checkbox" 
+                                   class="per-user-checkbox" 
+                                   {% if category.is_per_user %}checked{% endif %}
+                                   onchange="togglePerUser(this, {{ category.id }})">
+                            Per User Category
+                        </label>
+                    </div>
                     {% if current_user.is_admin or current_user.has_permission('delete_category') %}
                     <button type="button" class="remove-category-btn" onclick="removeCategory(this)">Remove Category</button>
                     {% endif %}
@@ -45,6 +54,32 @@
 
 
 <script>
+
+async function togglePerUser(checkbox, categoryId) {
+    try {
+        const response = await fetch(`/toggle-category-per-user/${categoryId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                is_per_user: checkbox.checked
+            })
+        });
+
+        const data = await response.json();
+        
+        if (!response.ok) {
+            checkbox.checked = !checkbox.checked; // Revert the checkbox
+            alert(data.error || 'Error updating category');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        checkbox.checked = !checkbox.checked; // Revert the checkbox
+        alert('Error updating category');
+    }
+}
+
 function addItem(categoryId) {
     const categorySection = document.querySelector(`.category-section[data-category-id="${categoryId}"]`);
     const itemsList = categorySection.querySelector('.items-list');
@@ -187,11 +222,12 @@ function saveChanges() {
     document.querySelectorAll('.category-section').forEach(categorySection => {
         const categoryId = categorySection.dataset.categoryId;
         const categoryName = categorySection.querySelector('h3').textContent;
+        const isPerUser = categorySection.querySelector('.per-user-checkbox').checked;
         const items = [];
         
         const categoryItems = Array.from(categorySection.querySelectorAll('.checklist-item input')).map(input => ({
             description: input.value.trim()
-        })).filter(item => item.description); // Filter out empty items
+        })).filter(item => item.description);
         
         // Check for duplicates within this category
         const duplicates = findDuplicates(categoryItems);
@@ -203,17 +239,18 @@ function saveChanges() {
         if (categoryItems.length > 0) {
             categories.push({
                 id: parseInt(categoryId),
+                is_per_user: isPerUser,
                 items: categoryItems
             });
         }
     });
-    
+
     if (hasDuplicates) {
         alert('Please remove duplicate items:\n\n' + duplicateMessages.join('\n'));
         return;
     }
-    
-    // Proceed with saving if no duplicates found
+
+    // Proceed with saving
     fetch("{{ url_for('main.edit_client_structure', client_id=client.id) }}", {
         method: 'POST',
         headers: {
@@ -240,6 +277,32 @@ function saveChanges() {
 
 
 <style>
+
+.category-title-group {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+.per-user-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.9em;
+    color: #666;
+}
+
+.per-user-checkbox {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+}
+
+/* Dark mode compatibility */
+.dark-mode .per-user-toggle {
+    color: #aaa;
+}
+
     .edit-structure-container {
         max-width: 800px;
         margin: 0 auto;

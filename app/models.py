@@ -36,6 +36,7 @@ class Client(db.Model):
     checklist_records = db.relationship('ChecklistRecord', backref='client', cascade='all, delete-orphan')
     checklists = db.relationship('ClientChecklist', backref='client', cascade='all, delete-orphan')
     checklist_items = db.relationship('ChecklistItem', backref='client', cascade='all, delete-orphan')
+    users = db.relationship('ClientUser', backref='client', cascade='all, delete-orphan')
 
 class ChecklistItem(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -52,6 +53,9 @@ class ChecklistRecord(db.Model):
     date_performed = db.Column(db.DateTime, default=datetime.utcnow)
     items = db.relationship('ChecklistItem', backref='record', lazy='dynamic')
     notes = db.relationship('ChecklistNotes', backref='record', lazy='dynamic')
+    user_checklists = db.relationship('UserChecklist', backref='record', lazy='dynamic')
+
+
 
     @property
     def completed_count(self):
@@ -92,6 +96,7 @@ class ChecklistCategory(db.Model):
     name = db.Column(db.String(50), nullable=False)
     template_id = db.Column(db.Integer, db.ForeignKey('checklist_template.id'))
     client_id = db.Column(db.Integer, db.ForeignKey('client.id'))
+    is_per_user = db.Column(db.Boolean, default=False)  # Add this line
     items = db.relationship('TemplateItem', backref='category', cascade='all, delete-orphan')
     
 class TemplateItem(db.Model):
@@ -125,3 +130,24 @@ class Role(db.Model):
     
     # Store permissions as a JSON string
     permissions = db.Column(db.JSON)
+
+class ClientUser(db.Model):
+    __tablename__ = 'client_user'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    client_id = db.Column(db.Integer, db.ForeignKey('client.id', ondelete='CASCADE'))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    __table_args__ = (
+        db.UniqueConstraint('client_id', 'name', name='uix_client_user_name'),
+    )
+
+class UserChecklist(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    record_id = db.Column(db.Integer, db.ForeignKey('checklist_record.id', ondelete='CASCADE'))
+    category_id = db.Column(db.Integer, db.ForeignKey('checklist_category.id', ondelete='CASCADE'))
+    client_user_id = db.Column(db.Integer, db.ForeignKey('client_user.id', ondelete='CASCADE'))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    client_user = db.relationship('ClientUser', backref='user_checklists')
+
