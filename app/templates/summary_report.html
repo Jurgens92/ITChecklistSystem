@@ -31,7 +31,7 @@
             <thead>
                 <tr>
                     <th>Client</th>
-                    <th>Total Checks</th>
+                    <th class="total-checks">Total Checks</th>
                 </tr>
             </thead>
             <tbody>
@@ -56,7 +56,7 @@
             <thead>
                 <tr>
                     <th>User</th>
-                    <th>Total Checks</th>
+                    <th class="total-checks">Total Checks</th>
                 </tr>
             </thead>
             <tbody>
@@ -90,6 +90,12 @@
     .check-count-link:hover {
         text-decoration: underline;
     }
+
+    .total-checks,
+    td:last-child {
+    text-align: center;
+    min-width: 120px;
+}
 </style>
 
 {% endblock %}

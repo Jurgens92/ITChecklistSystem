@@ -177,6 +177,24 @@ nav a:hover {
     border-bottom: 1px solid #ddd;
 }
 
+.report-table th.total-checks,
+.report-table td:last-child {
+    text-align: center;
+    width: 120px;  /* Reduced width */
+    padding-right: 0;  /* Remove right padding */
+}
+
+.check-count-link {
+    text-decoration: none;
+    color: #007bff;
+}
+
+/* Remove any margin or extra spacing */
+.report-table {
+    width: auto;  /* Let the table take natural width */
+    min-width: 50%;  /* Ensure minimum width */
+}
+
 .report-table th {
     background-color: #f8f9fa;
     font-weight: bold;
