@@ -77,7 +77,18 @@ def get_category_data(record_id):
         CompletedItem.record_id == record_id
     ).all()
 
+    # Get user checklist data
+    user_checklists = db.session.query(
+        UserChecklist, ClientUser
+    ).join(
+        ClientUser, UserChecklist.client_user_id == ClientUser.id
+    ).filter(
+        UserChecklist.record_id == record_id
+    ).all()
+
     categories_data = {}
+    
+    # Process completed items
     for completed_item, checklist_item, category in completed_items:
         if category not in categories_data:
             categories_data[category] = {
@@ -86,26 +97,21 @@ def get_category_data(record_id):
             }
         if completed_item.completed:
             categories_data[category]['items'].append(checklist_item.description)
-
-        # Add user information if category is per-user
-        if category.is_per_user:
-            user_checklists = UserChecklist.query.filter_by(
-                record_id=record_id,
-                category_id=category.id
-            ).all()
-            categories_data[category]['users'] = [
-                uc.client_user.name for uc in user_checklists if uc.client_user
-            ]
     
+    # Process user data
+    for user_checklist, client_user in user_checklists:
+        for category in categories_data:
+            if user_checklist.category_id == category.id:
+                categories_data[category]['users'].append(client_user.name)
+
     return categories_data
 
 def add_record_to_pdf(elements, record, styles, is_first_record=False):
     """Add a single record to the PDF elements list"""
-    # Add page break before record (except for the first record)
     if not is_first_record:
         elements.append(PageBreak())
     
-    # Record header with separate lines for date, client, and user
+    # Record header
     elements.append(Paragraph(
         f"Date: {record.date_performed.strftime('%Y-%m-%d %H:%M')}",
         styles['heading2']
@@ -119,7 +125,7 @@ def add_record_to_pdf(elements, record, styles, is_first_record=False):
         styles['heading2']
     ))
     
-    elements.append(Spacer(1, 12))  # Add some space after the header
+    elements.append(Spacer(1, 12))
     
     # Get category data
     categories_data = get_category_data(record.id)
@@ -151,7 +157,7 @@ def add_record_to_pdf(elements, record, styles, is_first_record=False):
                 elements.append(Paragraph(para, styles['normal']))
         elements.append(Spacer(1, 12))
 
-    elements.append(Spacer(1, 20))  # Add space between records
+    elements.append(Spacer(1, 20))
 
 def get_local_time():
     settings = Settings.query.first()
@@ -345,9 +351,6 @@ def submit_checklist():
             raise ValueError("No data provided")
 
         client_id = data.get('client_id')
-        if not client_id:
-            raise ValueError("Client ID is required")
-        
         completed_item_ids = data.get('items', [])
         notes_text = data.get('notes', '').strip()
         per_user_data = data.get('per_user_data', {})
@@ -360,23 +363,15 @@ def submit_checklist():
         )
         db.session.add(record)
         db.session.flush()
-        #
-        # Add notes if provided
-        if notes_text:
-            notes = ChecklistNotes(
-                checklist_record_id=record.id,
-                note_text=notes_text,
-                user_id=current_user.id
-            )
-            db.session.add(notes)
 
-        # Process completed items and user data
+        # Initialize summary data
         summary_data = {}
-        categories = db.session.query(ChecklistCategory).join(
-            ChecklistItem, ChecklistItem.category_id == ChecklistCategory.id
-        ).filter(ChecklistItem.client_id == client_id).distinct().all()
-
+        
+        # Get all categories for this client
+        categories = ChecklistCategory.query.all()
+        
         for category in categories:
+            # Get items for this category and client
             items = ChecklistItem.query.filter_by(
                 client_id=client_id,
                 category_id=category.id
@@ -385,8 +380,6 @@ def submit_checklist():
             completed_items = []
             for item in items:
                 is_completed = str(item.id) in completed_item_ids
-                
-                # Create CompletedItem record
                 completed_item = CompletedItem(
                     record_id=record.id,
                     checklist_item_id=item.id,
@@ -398,39 +391,51 @@ def submit_checklist():
                 if is_completed:
                     completed_items.append(item.description)
             
-            # Only add to summary if there are completed items or selected users
-            if completed_items or (category.is_per_user and str(category.id) in per_user_data):
+            # Only add category to summary if it has completed items or selected users
+            if completed_items or (str(category.id) in per_user_data):
                 summary_data[category.name] = {
                     'items': completed_items,
                     'users': []
                 }
                 
-                # Handle per-user data for this category
-                if category.is_per_user and str(category.id) in per_user_data:
+                # Process selected users for this category
+                if str(category.id) in per_user_data:
                     user_ids = per_user_data[str(category.id)]
+                    current_app.logger.info(f"Processing users for category {category.id}: {user_ids}")
+                    
                     for user_id in user_ids:
                         user = ClientUser.query.get(user_id)
                         if user:
                             summary_data[category.name]['users'].append(user.name)
+                            # Create UserChecklist record
                             user_checklist = UserChecklist(
                                 record_id=record.id,
                                 category_id=category.id,
                                 client_user_id=user_id
                             )
                             db.session.add(user_checklist)
-        
+
+        # Add notes if provided
+        if notes_text:
+            notes = ChecklistNotes(
+                checklist_record_id=record.id,
+                note_text=notes_text,
+                user_id=current_user.id
+            )
+            db.session.add(notes)
+
+        current_app.logger.info(f"Final summary data: {summary_data}")
         db.session.commit()
         
         return jsonify({
             'status': 'success',
             'summary': summary_data,
-            'notes': notes_text,
-            'record_id': record.id
+            'notes': notes_text
         })
         
     except Exception as e:
-        db.session.rollback()
         current_app.logger.error(f"Error in submit_checklist: {str(e)}")
+        db.session.rollback()
         return jsonify({
             "status": "error",
             "message": str(e)
@@ -1415,7 +1420,7 @@ def add_custom_category(client_id):
 def checklist_detail(record_id):
     record = ChecklistRecord.query.get_or_404(record_id)
     
-    # Get all completed items for this record with their details
+    # Get completed items and user data organized by category
     completed_items = db.session.query(
         CompletedItem, ChecklistItem, ChecklistCategory
     ).join(
@@ -1423,33 +1428,47 @@ def checklist_detail(record_id):
     ).join(
         ChecklistCategory, ChecklistItem.category_id == ChecklistCategory.id
     ).filter(
-        CompletedItem.record_id == record_id
+        CompletedItem.record_id == record_id,
+        CompletedItem.completed == True  # Only get completed items
     ).all()
-    
-    # Organize items by category
+
+    # Get user checklist data
+    user_checklists = db.session.query(
+        UserChecklist, ClientUser
+    ).join(
+        ClientUser, UserChecklist.client_user_id == ClientUser.id
+    ).filter(
+        UserChecklist.record_id == record_id
+    ).all()
+
+    # Organize data by category
     items_by_category = {}
     for completed_item, checklist_item, category in completed_items:
         if category not in items_by_category:
-            items_by_category[category] = []
-        
-        items_by_category[category].append({
-            'description': checklist_item.description,
-            'completed': completed_item.completed
-        })
+            items_by_category[category] = {
+                'completed_items': [],  # Changed from 'items' to 'completed_items'
+                'users': []
+            }
+        items_by_category[category]['completed_items'].append(checklist_item.description)
+
+    # Add user data to categories
+    for user_checklist, client_user in user_checklists:
+        category = ChecklistCategory.query.get(user_checklist.category_id)
+        if category not in items_by_category:
+            items_by_category[category] = {
+                'completed_items': [],  # Changed from 'items' to 'completed_items'
+                'users': []
+            }
+        items_by_category[category]['users'].append(client_user.name)
     
-    # Get the notes
+    # Get notes
     notes = ChecklistNotes.query.filter_by(checklist_record_id=record_id).first()
-    
-    # Get user checklists
-    user_checklists = UserChecklist.query.filter_by(record_id=record_id).all()
     
     return render_template(
         'checklist_detail.html',
         record=record,
-        convert_to_local_time=convert_to_local_time,
         items_by_category=items_by_category,
-        notes=notes,
-        user_checklists=user_checklists
+        notes=notes
     )
 
 @main.route("/change-password", methods=["GET", "POST"])
