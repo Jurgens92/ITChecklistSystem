@@ -159,10 +159,14 @@ function applyUserSelection() {
     } else {
         display.textContent = 'No users selected';
     }
-    
+    saveChecklistState();
     closeUserModal();
 }
 
+document.querySelector('form:not(#templateForm)').addEventListener('submit', function() {
+    const clientId = document.querySelector('input[name="client_id"]').value;
+    localStorage.removeItem(getStorageKey(clientId));
+});
 
 // Update form submission handler
 document.addEventListener('DOMContentLoaded', function() {
@@ -242,38 +246,60 @@ document.addEventListener('DOMContentLoaded', function() {
             checkedItems: Array.from(checkboxes)
                 .filter(cb => cb.checked)
                 .map(cb => cb.value),
-            notes: notes
+            notes: notes,
+            selectedUsers: selectedUsers
         };
         
         localStorage.setItem(getStorageKey(clientId), JSON.stringify(state));
     }
     
     function loadChecklistState() {
-        const clientId = document.querySelector('input[name="client_id"]').value;
-        const savedState = localStorage.getItem(getStorageKey(clientId));
-        
-        if (!savedState) return;
-        
-        const state = JSON.parse(savedState);
-        
-        // Clear state if it's from a previous day
-        if (state.date !== new Date().toDateString()) {
-            localStorage.removeItem(getStorageKey(clientId));
-            return;
-        }
-        
-        // Restore checked items
-        state.checkedItems.forEach(itemId => {
-            const checkbox = document.querySelector(`input[type="checkbox"][value="${itemId}"]`);
-            if (checkbox) checkbox.checked = true;
-        });
-        
-        // Restore notes
-        const notesTextarea = document.querySelector('textarea[name="notes"]');
-        if (notesTextarea && state.notes) {
-            notesTextarea.value = state.notes;
+    const clientId = document.querySelector('input[name="client_id"]').value;
+    const savedState = localStorage.getItem(getStorageKey(clientId));
+    
+    if (!savedState) return;
+    
+    const state = JSON.parse(savedState);
+    
+    // Clear state if it's from a previous day
+    if (state.date !== new Date().toDateString()) {
+        localStorage.removeItem(getStorageKey(clientId));
+        return;
+    }
+    
+    // Restore checked items
+    state.checkedItems.forEach(itemId => {
+        const checkbox = document.querySelector(`input[type="checkbox"][value="${itemId}"]`);
+        if (checkbox) checkbox.checked = true;
+    });
+    
+    // Restore notes
+    const notesTextarea = document.querySelector('textarea[name="notes"]');
+    if (notesTextarea && state.notes) {
+        notesTextarea.value = state.notes;
+    }
+
+    // Restore selected users
+    if (state.selectedUsers) {
+        selectedUsers = state.selectedUsers;
+        // Update the display for each category
+        for (const categoryId in selectedUsers) {
+            const display = document.getElementById(`selected-users-${categoryId}`);
+            if (display) {
+                // Get user names for display
+                const userIds = selectedUsers[categoryId];
+                const userNames = [];
+                userIds.forEach(userId => {
+                    const userLabel = document.querySelector(`label.user-checkbox input[value="${userId}"]`);
+                    if (userLabel) {
+                        userNames.push(userLabel.parentElement.textContent.trim());
+                    }
+                });
+                display.textContent = userNames.length > 0 ? userNames.join(', ') : 'No users selected';
+            }
         }
     }
+}
     
     // Event listeners
     document.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
