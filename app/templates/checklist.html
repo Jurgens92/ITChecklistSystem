@@ -120,7 +120,7 @@
 
 <script>
 let currentCategoryId = null;
-const selectedUsers = {};
+let selectedUsers = {};
 
 function showUserSelection(categoryId) {
     currentCategoryId = categoryId;
@@ -147,6 +147,10 @@ function applyUserSelection() {
     }));
     
     selectedUsers[currentCategoryId] = users.map(u => u.id);
+    // Debug log
+    console.log('Updated selectedUsers:', selectedUsers);
+    console.log('Current category users:', users);
+
     
     // Update display
     const display = document.getElementById(`selected-users-${currentCategoryId}`);
@@ -159,7 +163,7 @@ function applyUserSelection() {
     closeUserModal();
 }
 
-// Update form submission handler
+
 // Update form submission handler
 document.addEventListener('DOMContentLoaded', function() {
     const checklistForm = document.querySelector('form:not(#templateForm)');
@@ -182,6 +186,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Get client ID
                 const clientId = document.querySelector('input[name="client_id"]').value;
 
+                // Log the selected users data before submission
+                console.log('Selected Users Data:', selectedUsers);
+
                 // Prepare the data
                 const submitData = {
                     client_id: clientId,
@@ -202,7 +209,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 });
 
                 const data = await response.json();
-                console.log('Response:', data); // Debug log
+                console.log('Response from server:', data); // Debug log
 
                 if (data.status === 'success') {
                     // Clear localStorage
@@ -298,15 +305,16 @@ document.addEventListener('DOMContentLoaded', function() {
     for (const categoryName in summary) {
         summaryText += `${categoryName}:\n`;
         
-        // Add users if present
+        // Add selected users if present
         if (summary[categoryName].users && summary[categoryName].users.length > 0) {
-            summaryText += `Users: ${summary[categoryName].users.join(', ')}\n`;
+            summaryText += `Selected Users: ${summary[categoryName].users.join(', ')}\n`;
+            console.log(`Adding users for ${categoryName}:`, summary[categoryName].users);
         }
         
         // Add completed items
         if (summary[categoryName].items && summary[categoryName].items.length > 0) {
             summary[categoryName].items.forEach(item => {
-                summaryText += `- ${item}\n`;
+                summaryText += `  - ${item}\n`;
             });
         }
         
@@ -318,16 +326,11 @@ document.addEventListener('DOMContentLoaded', function() {
         summaryText += `Notes:\n${notes}\n`;
     }
     
-    console.log('Generated Summary:', summaryText); // Debug log
-    
-    // Update modal content
+    console.log('Final summary text:', summaryText);
     document.getElementById('summaryContent').textContent = summaryText;
-    
-    // Show modal
-    const modal = document.getElementById('summaryModal');
-    modal.style.display = 'flex';
+    document.getElementById('summaryModal').style.display = 'flex';
 }
-    
+
     function copySummary() {
         const summaryText = document.getElementById('summaryContent').textContent;
         const textarea = document.createElement('textarea');
